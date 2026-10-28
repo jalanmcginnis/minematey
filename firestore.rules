@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Explicitly block listing all users
+    match /users {
+      allow list: if false;
+    }
+
+    // Allow a user to access their own profile doc
+    match /users/{userId} {
+      allow get, create, update, delete: if isOwner(userId);
+      allow list: if false;
+    }
+
+    // ✅ Allow a user to access ANY docs in ANY subcollections under their user node
+    match /users/{userId}/{documentPath=**} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Workplace exams collection supporting multi-tenancy
+    match /workplace_exams/{examId} {
+      allow read, write: if true;
+    }
+
+    // Equipment exams collection supporting multi-tenancy
+    match /equipment_exams/{examId} {
+      allow read, write: if true;
+    }
+
+    // Required documents collection supporting multi-tenancy
+    match /required_documents/{docId} {
+      allow read, write: if true;
+    }
+
+    // Training documents collection supporting multi-tenancy
+    match /training_documents/{docId} {
+      allow read, write: if true;
+    }
+
+    // Standalone site photos and attachments collection supporting multi-tenancy
+    match /exam_attachments/{attachmentId} {
+      allow read, write: if true;
+    }
+
+    // Standalone equipment photos and defect attachments collection supporting multi-tenancy
+    match /equipment_attachments/{attachmentId} {
+      allow read, write: if true;
+    }
+
+    // Schedules collection supporting multi-tenancy
+    match /schedules/{scheduleId} {
+      allow read, write: if true;
+    }
+
+    // User profiles collection supporting role and multi-tenant mine assignments
+    match /user_profiles/{userId} {
+      allow read, write: if true;
+    }
+
+    // Company mine sites collection supporting multi-tenancy
+    match /mines/{mineId} {
+      allow read, write: if true;
+    }
+
+    // Companies collection storing subscription plan tiers and seat/mine limits
+    match /companies/{companyId} {
+      allow read, write: if true;
+    }
+  }
+}

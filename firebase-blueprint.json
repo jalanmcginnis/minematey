@@ -1,0 +1,776 @@
+{
+  "entities": {
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
+      "type": "object",
+      "description": "Represents a user profile in the MineMate application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user profile."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "User's first name."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "User's last name."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "phone": {
+          "type": "string",
+          "description": "User's phone number."
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email"
+      ]
+    },
+    "WorkplaceExam": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WorkplaceExam",
+      "type": "object",
+      "description": "Represents a workplace exam form.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the workplace exam."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N WorkplaceExam)"
+        },
+        "examDate": {
+          "type": "string",
+          "description": "Date of the workplace exam.",
+          "format": "date-time"
+        },
+        "location": {
+          "type": "string",
+          "description": "Location where the workplace exam was conducted."
+        },
+        "details": {
+          "type": "string",
+          "description": "Details of the workplace exam."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "examDate",
+        "location"
+      ]
+    },
+    "EquipmentExam": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "EquipmentExam",
+      "type": "object",
+      "description": "Represents an equipment exam form.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the equipment exam."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N EquipmentExam)"
+        },
+        "equipmentNumber": {
+          "type": "string",
+          "description": "Identifier for the specific piece of equipment (e.g., asset number)."
+        },
+        "equipmentType": {
+          "type": "string",
+          "description": "Type of equipment being examined."
+        },
+        "operator": {
+          "type": "string",
+          "description": "Name of the operator who conducted the exam."
+        },
+        "operatingHours": {
+          "type": "number",
+          "description": "Operating hours of the equipment at the time of exam."
+        },
+        "examDate": {
+          "type": "string",
+          "description": "Date of the equipment exam.",
+          "format": "date-time"
+        },
+        "defectsFound": {
+          "type": "string",
+          "description": "Details of any defects found during the exam."
+        },
+        "correctiveAction": {
+          "type": "string",
+          "description": "Details of corrective actions taken."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "operational",
+            "needs_repair",
+            "out_of_service"
+          ],
+          "description": "Operational status of the equipment."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "equipmentNumber",
+        "equipmentType",
+        "operator",
+        "operatingHours",
+        "examDate",
+        "defectsFound",
+        "status"
+      ]
+    },
+    "Document": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Document",
+      "type": "object",
+      "description": "Represents a stored document.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the document."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N Document)"
+        },
+        "documentName": {
+          "type": "string",
+          "description": "Name of the document."
+        },
+        "fileUrl": {
+          "type": "string",
+          "description": "URL where the document file is stored.",
+          "format": "uri"
+        },
+        "uploadDate": {
+          "type": "string",
+          "description": "Date when the document was uploaded.",
+          "format": "date-time"
+        },
+        "type": {
+          "type": "string",
+          "description": "The category or type of the document (e.g., 'training-plan')."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "documentName",
+        "fileUrl",
+        "uploadDate",
+        "type"
+      ]
+    },
+    "QuarterlyReport": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "QuarterlyReport",
+      "type": "object",
+      "description": "Represents a time-stamped quarterly report document.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the report."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the user who uploaded the report."
+        },
+        "periodKey": {
+          "type": "string",
+          "description": "Composite key for the reporting period, e.g., '2025-Q1'."
+        },
+        "year": {
+          "type": "number",
+          "description": "The year of the report."
+        },
+        "quarter": {
+          "type": "number",
+          "description": "The quarter of the report (1-4)."
+        },
+        "documentName": {
+          "type": "string",
+          "description": "Original name of the uploaded file."
+        },
+        "fileUrl": {
+          "type": "string",
+          "description": "URL where the report file is stored.",
+          "format": "uri"
+        },
+        "storagePath": {
+          "type": "string",
+          "description": "The full path to the file in Firebase Storage."
+        },
+        "fileType": {
+          "type": "string",
+          "description": "The MIME type of the file."
+        },
+        "fileSize": {
+          "type": "number",
+          "description": "The size of the file in bytes."
+        },
+        "uploadDate": {
+          "type": "string",
+          "description": "Date when the report was uploaded.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "periodKey",
+        "year",
+        "quarter",
+        "documentName",
+        "fileUrl",
+        "storagePath",
+        "uploadDate"
+      ]
+    },
+    "Schedule": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Schedule",
+      "type": "object",
+      "description": "Represents a scheduled exam or reminder.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the schedule."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N Schedule)"
+        },
+        "examType": {
+          "type": "string",
+          "description": "Type of exam scheduled (e.g., Workplace, Equipment)."
+        },
+        "scheduledDate": {
+          "type": "string",
+          "description": "Date when the exam is scheduled.",
+          "format": "date-time"
+        },
+        "reminderSet": {
+          "type": "boolean",
+          "description": "Indicates whether a reminder is set for this schedule."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "examType",
+        "scheduledDate"
+      ]
+    },
+    "Training": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Training",
+      "type": "object",
+      "description": "Represents a training module or record.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the training record."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N Training)"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the training module."
+        },
+        "description": {
+          "type": "string",
+          "description": "A short description of the training."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the training (e.g., Safety, Equipment Operation)."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "Not Started",
+            "In Progress",
+            "Completed"
+          ],
+          "description": "The completion status of the training."
+        },
+        "dueDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The date the training is due."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "title",
+        "category",
+        "status"
+      ]
+    },
+    "Product": {
+      "title": "Product",
+      "type": "object",
+      "description": "Represents a product or service that can be sold, synced from Stripe.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the product (from Stripe)."
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether the product is currently available for purchase."
+        },
+        "name": {
+          "type": "string",
+          "description": "The product's name, meant to be displayable to the customer."
+        },
+        "description": {
+          "type": "string",
+          "description": "The product's description, meant to be displayable to the customer."
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "starter",
+            "pro",
+            "enterprise"
+          ],
+          "description": "The role to assign to the user upon purchasing this product. This maps to an application-specific plan."
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "A list of up to 8 URLs of images for this product, meant to be displayable to the customer."
+        },
+        "metadata": {
+          "type": "object",
+          "description": "A metadata object for storing plan-specific attributes like user or mine limits.",
+          "properties": {
+            "usersMax": {
+              "type": "string"
+            },
+            "minesMax": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "active",
+        "name"
+      ]
+    },
+    "Price": {
+      "title": "Price",
+      "type": "object",
+      "description": "Represents the price of a product, synced from Stripe.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the price (from Stripe)."
+        },
+        "productId": {
+          "type": "string",
+          "description": "The ID of the product this price belongs to."
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether the price can be used for new purchases."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the price."
+        },
+        "unit_amount": {
+          "type": "number",
+          "description": "The unit amount in the smallest currency unit (e.g., cents)."
+        },
+        "currency": {
+          "type": "string",
+          "description": "Three-letter ISO currency code."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "one_time",
+            "recurring"
+          ],
+          "description": "Whether the price is for a one-time purchase or a recurring subscription."
+        },
+        "interval": {
+          "type": "string",
+          "enum": [
+            "day",
+            "week",
+            "month",
+            "year"
+          ],
+          "description": "The frequency at which a subscription is billed."
+        },
+        "interval_count": {
+          "type": "number",
+          "description": "The number of intervals between subscription billings."
+        }
+      },
+      "required": [
+        "id",
+        "productId",
+        "active",
+        "unit_amount",
+        "currency",
+        "type"
+      ]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "type": "object",
+      "description": "Represents a user's subscription to a product.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the subscription (from Stripe)."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user this subscription belongs to."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "trialing",
+            "active",
+            "past_due",
+            "unpaid",
+            "canceled",
+            "incomplete",
+            "incomplete_expired"
+          ],
+          "description": "The status of the subscription."
+        },
+        "priceId": {
+          "type": "string",
+          "description": "The ID of the price for this subscription."
+        },
+        "productId": {
+          "type": "string",
+          "description": "The ID of the product for this subscription."
+        },
+        "cancel_at_period_end": {
+          "type": "boolean",
+          "description": "If true, the subscription will cancel at the end of the current period."
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of when the subscription was created."
+        },
+        "current_period_start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Start of the current billing period."
+        },
+        "current_period_end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "End of the current billing period."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "status",
+        "priceId",
+        "productId",
+        "cancel_at_period_end"
+      ]
+    },
+    "CheckoutSession": {
+      "title": "CheckoutSession",
+      "type": "object",
+      "description": "Represents a Stripe Checkout session for a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the checkout session (from Stripe)."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user this session belongs to."
+        },
+        "priceId": {
+          "type": "string",
+          "description": "The ID of the price being purchased."
+        },
+        "success_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The URL to redirect to on successful purchase."
+        },
+        "cancel_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The URL to redirect to if the purchase is canceled."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The URL of the Stripe Checkout page."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "priceId",
+        "success_url",
+        "cancel_url"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous",
+      "google"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores user profile information.  Path-based ownership for user data.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/workplaceExams/{workplaceExamId}",
+        "definition": {
+          "entityName": "WorkplaceExam",
+          "schema": {
+            "$ref": "#/backend/entities/WorkplaceExam"
+          },
+          "description": "Stores workplace exam forms for a specific user. Path-based ownership ensures only the user can access their exams.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "workplaceExamId",
+              "description": "The unique identifier for the workplace exam."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/equipmentExams/{equipmentExamId}",
+        "definition": {
+          "entityName": "EquipmentExam",
+          "schema": {
+            "$ref": "#/backend/entities/EquipmentExam"
+          },
+          "description": "Stores equipment exam forms for a specific user. Path-based ownership ensures only the user can access their exams.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "equipmentExamId",
+              "description": "The unique identifier for the equipment exam."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/documents/{documentId}",
+        "definition": {
+          "entityName": "Document",
+          "schema": {
+            "$ref": "#/backend/entities/Document"
+          },
+          "description": "Stores documents for a specific user. Path-based ownership ensures only the user can access their documents.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "documentId",
+              "description": "The unique identifier for the document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/quarterly-reports/{reportId}",
+        "definition": {
+          "entityName": "QuarterlyReport",
+          "schema": {
+            "$ref": "#/backend/entities/QuarterlyReport"
+          },
+          "description": "Stores quarterly report documents for a specific user. Path-based ownership ensures only the user can access their reports.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "reportId",
+              "description": "The unique identifier for the quarterly report."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/schedules/{scheduleId}",
+        "definition": {
+          "entityName": "Schedule",
+          "schema": {
+            "$ref": "#/backend/entities/Schedule"
+          },
+          "description": "Stores schedules for a specific user. Path-based ownership ensures only the user can access their schedules.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "scheduleId",
+              "description": "The unique identifier for the schedule."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/trainings/{trainingId}",
+        "definition": {
+          "entityName": "Training",
+          "schema": {
+            "$ref": "#/backend/entities/Training"
+          },
+          "description": "Stores training records for a specific user. Path-based ownership ensures only the user can access their training data.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "trainingId",
+              "description": "The unique identifier for the training record."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/products/{productId}",
+        "definition": {
+          "entityName": "Product",
+          "schema": {
+            "$ref": "#/backend/entities/Product"
+          },
+          "description": "Stores product information, synced from Stripe.",
+          "params": [
+            {
+              "name": "productId",
+              "description": "The unique identifier for the product."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/products/{productId}/prices/{priceId}",
+        "definition": {
+          "entityName": "Price",
+          "schema": {
+            "$ref": "#/backend/entities/Price"
+          },
+          "description": "Stores price information for a specific product, synced from Stripe.",
+          "params": [
+            {
+              "name": "productId",
+              "description": "The unique identifier for the product."
+            },
+            {
+              "name": "priceId",
+              "description": "The unique identifier for the price."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/subscriptions/{subscriptionId}",
+        "definition": {
+          "entityName": "Subscription",
+          "schema": {
+            "$ref": "#/backend/entities/Subscription"
+          },
+          "description": "Stores user subscription information. Path-based ownership ensures only the user can access their subscription.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "subscriptionId",
+              "description": "The unique identifier for the subscription."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/checkout_sessions/{sessionId}",
+        "definition": {
+          "entityName": "CheckoutSession",
+          "schema": {
+            "$ref": "#/backend/entities/CheckoutSession"
+          },
+          "description": "Stores Stripe Checkout session information for a user. Path-based ownership ensures only the user can access their session.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "sessionId",
+              "description": "The unique identifier for the checkout session."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to ensure authorization independence, clarity, and scalability. User profiles are stored in `/users/{userId}`, enabling path-based ownership.  Workplace exams, equipment exams, documents, schedules, and training records are stored as subcollections of the user profile (e.g., `/users/{userId}/workplaceExams/{workplaceExamId}`), which clearly defines the relationship between a user and their data, and enables simple security rules. This direct path-based ownership avoids the need for complex `get()` calls in security rules, thus enforcing Authorization Independence (CRITICAL). This structure supports secure `list` operations (QAPs) by ensuring that listing a user's data only requires access to the user's specific subcollection. Subcollections provide a natural scoping mechanism for data access."
+  }
+}
+    

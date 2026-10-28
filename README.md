@@ -1,3 +1,6 @@
-# minematey
-Mining Mate is a Firebase-based compliance management application for mining operations, providing structured recordkeeping, inspections, and subscription-based access control.
-# minematey
+# Firebase Studio
+
+This is a NextJS starter in Firebase Studio.
+
+To get started, take a look at src/app/page.tsx.
+firebase init hosting
