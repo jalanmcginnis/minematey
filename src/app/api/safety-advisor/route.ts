@@ -1,5 +1,7 @@
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { workplaceRecommendation } from '@/ai/flows/workplace-recommendation';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,6 +14,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Lazy-import to prevent build-time crashes when AI API keys aren't present
+    const { workplaceRecommendation } = await import('@/ai/flows/workplace-recommendation');
 
     const result = await workplaceRecommendation({
       worksiteDetails,
