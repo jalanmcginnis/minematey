@@ -28,6 +28,7 @@ import {
   TrainingDocumentCategoryCard,
   TrainingDocRecord,
 } from '@/components/training-document-category-card';
+import { formatCalendarDate } from '@/lib/format-calendar-date';
 
 interface TrainingCategoryConfig {
   name: string;
@@ -138,11 +139,7 @@ export default function TrainingDocumentsPage() {
     setIsViewDialogOpen(true);
   };
 
-  const formatDateDisplay = (rawDate: string | null) => {
-    if (!rawDate) return '—';
-    const parsed = new Date(rawDate);
-    return isNaN(parsed.getTime()) ? rawDate : parsed.toLocaleDateString();
-  };
+  const formatDateDisplay = (rawDate: string | null) => formatCalendarDate(rawDate);
 
   const isViewingPlanRecord =
     viewingRecord?.category.toLowerCase().includes('approved training plan') ?? false;

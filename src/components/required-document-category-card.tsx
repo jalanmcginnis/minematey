@@ -35,6 +35,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { formatCalendarDate } from '@/lib/format-calendar-date';
 import { getNextQuarterlyReportDeadline } from '@/lib/msha-quarterly-deadline';
 
 export interface RequiredDocRecord {
@@ -214,11 +215,7 @@ export function RequiredDocumentCategoryCard({
     });
   };
 
-  const formatDateDisplay = (rawDate: string) => {
-    if (!rawDate) return '—';
-    const parsed = new Date(rawDate);
-    return isNaN(parsed.getTime()) ? rawDate : parsed.toLocaleDateString();
-  };
+  const formatDateDisplay = (rawDate: string) => formatCalendarDate(rawDate);
 
   return (
     <Card
@@ -455,7 +452,18 @@ export function RequiredDocumentCategoryCard({
                 >
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate" title={docItem.documentTitle}>
-                      {docItem.documentTitle}
+                      {docItem.fileUrl ? (
+                        <a
+                          href={docItem.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline"
+                        >
+                          {docItem.documentTitle}
+                        </a>
+                      ) : (
+                        docItem.documentTitle
+                      )}
                     </p>
                     <div className="flex items-center gap-2 text-muted-foreground mt-0.5">
                       <span className="inline-flex items-center gap-1 shrink-0">
