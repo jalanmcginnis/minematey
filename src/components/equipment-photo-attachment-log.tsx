@@ -20,10 +20,15 @@ import {
   doc,
   deleteDoc,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useFirestore, useStorage } from '@/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import {
+  deleteStorageObject,
+  formatUploadError,
+  sanitizeStorageFileName,
+  uploadFileResumable,
+} from '@/lib/upload-document';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,9 +48,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
-
 export interface EquipmentAttachmentRecord {
   id: string;
   companyId: string;
@@ -56,6 +58,7 @@ export interface EquipmentAttachmentRecord {
   equipmentId: string;
   description: string;
   examinerName: string;
+  storagePath?: string;
   createdAt: string;
 }
 
@@ -68,7 +71,7 @@ export function EquipmentPhotoAttachmentLog({
 }: EquipmentPhotoAttachmentLogProps) {
   const firestore = useFirestore();
   const storage = useStorage();
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const resolvedExaminerName = profile?.fullName || user?.email || 'Examiner';
@@ -117,6 +120,7 @@ export function EquipmentPhotoAttachmentLog({
             equipmentId: data.equipmentId || '—',
             description: data.description || '',
             examinerName: data.examinerName || '—',
+            storagePath: data.storagePath || '',
             createdAt: data.createdAt || '',
           };
         });
@@ -167,7 +171,26 @@ export function EquipmentPhotoAttachmentLog({
   const handleUploadAttachment = async (e: FormEvent) => {
     e.preventDefault();
 
+    if (authLoading) {
+      toast({
+        title: 'Please wait',
+        description: 'Sign-in is still finishing. Try the upload again in a moment.',
+      });
+      return;
+    }
+
+    if (!user) {
+      console.error('Equipment attachment upload blocked: no authenticated user.');
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'You must be signed in before uploading equipment photos.',
+      });
+      return;
+    }
+
     if (!firestore || !storage) {
+      console.error('Equipment attachment upload blocked: Firebase services are not ready.');
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -196,32 +219,29 @@ export function EquipmentPhotoAttachmentLog({
 
     setIsUploading(true);
 
+    const safeName = sanitizeStorageFileName(selectedFile.name);
+    const mineSegment = selectedMineId.replace(/[^\w.\-]+/g, '_');
+    const storagePath = `equipment_photos/${mineSegment}/${Date.now()}_${safeName}`;
+    let stored = false;
+
     try {
-      // Step 1: Create a reference in Firebase Storage under equipment_photos/{selectedMineId}/{timestamp}_{fileName}
-      const storagePath = `equipment_photos/${selectedMineId}/${Date.now()}_${selectedFile.name}`;
-      const storageRef = ref(storage, storagePath);
+      const { downloadUrl } = await uploadFileResumable(storage, storagePath, selectedFile);
+      stored = true;
 
-      // Step 2: Upload the file bytes to Firebase Storage
-      const uploadSnapshot = await uploadBytes(storageRef, selectedFile);
-
-      // Step 3: Get the public download URL for the uploaded file
-      const downloadUrl = await getDownloadURL(uploadSnapshot.ref);
-
-      // Step 4: Construct the metadata record for the "equipment_attachments" Firestore collection
       const attachmentData = {
         companyId: profile?.companyId || 'comp_test_001',
         mshaMineId: selectedMineId,
-        userId: user?.uid || 'guest_user',
+        userId: user.uid,
         fileUrl: downloadUrl,
         fileName: selectedFile.name,
         fileType: selectedFile.type || 'application/octet-stream',
+        storagePath,
         equipmentId: equipmentIdInput.trim(),
         description: descriptionInput.trim(),
         examinerName: examinerInput.trim() || profile?.fullName || user?.email || 'Examiner',
         createdAt: new Date().toISOString(),
       };
 
-      // Step 5: Save the attachment metadata record to Firestore
       const attachmentsCollection = collection(firestore, 'equipment_attachments');
       await addDoc(attachmentsCollection, attachmentData);
 
@@ -235,19 +255,19 @@ export function EquipmentPhotoAttachmentLog({
       setEquipmentIdInput('');
       setDescriptionInput('');
       setExaminerInput(profile?.fullName || user?.email || 'Examiner');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error uploading and logging equipment attachment:', error);
-      errorEmitter.emit(
-        'permission-error',
-        new FirestorePermissionError({
-          path: 'equipment_attachments',
-          operation: 'create',
-        })
-      );
+      if (stored) {
+        try {
+          await deleteStorageObject(storage, storagePath);
+        } catch (cleanupError) {
+          console.error('Failed to remove orphaned equipment photo after Firestore write failed:', cleanupError);
+        }
+      }
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
-        description: error.message || 'Could not upload and log equipment attachment.',
+        description: formatUploadError(error),
       });
     } finally {
       setIsUploading(false);
@@ -263,10 +283,11 @@ export function EquipmentPhotoAttachmentLog({
   };
 
   // Delete an equipment attachment record from Firestore
-  const handleDeleteAttachment = async (recordId: string) => {
-    if (!firestore) return;
+  const handleDeleteAttachment = async (record: EquipmentAttachmentRecord) => {
+    if (!firestore || !storage) return;
     try {
-      const docRef = doc(firestore, 'equipment_attachments', recordId);
+      await deleteStorageObject(storage, record.storagePath);
+      const docRef = doc(firestore, 'equipment_attachments', record.id);
       await deleteDoc(docRef);
       toast({
         title: 'Attachment Deleted',
@@ -490,7 +511,7 @@ export function EquipmentPhotoAttachmentLog({
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteAttachment(record.id)}
+                          onClick={() => handleDeleteAttachment(record)}
                         >
                           <Trash2 className="mr-1 h-4 w-4" />
                           Delete

@@ -2,17 +2,16 @@
 
 import { ChangeEvent, useState } from "react";
 import { useUser, useFirestore, useStorage, useCollection, useMemoFirebase } from "@/firebase";
+import { useAuth } from "@/context/AuthContext";
+import { useActiveMine } from "@/context/MineContext";
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
-  limit,
-  orderBy,
   query,
-  serverTimestamp,
+  where,
 } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { deleteStorageObject, formatUploadError, uploadDocumentRecord } from "@/lib/upload-document";
 import {
   Card,
   CardContent,
@@ -41,9 +40,15 @@ type CommencementDoc = {
 };
 
 const MAX_COMMENCEMENTS = 5;
+const DOC_TYPE = "mine-commencements";
+const FOLDER_NAME = "commencements";
+const CATEGORY_NAME = "Commencements";
+const COLLECTION_NAME = "required_documents" as const;
 
 export function CommencementsCard() {
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
+  const { profile } = useAuth();
+  const { selectedMineId } = useActiveMine();
   const firestore = useFirestore();
   const storage = useStorage();
   const { toast } = useToast();
@@ -54,58 +59,58 @@ export function CommencementsCard() {
   const queryRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(
-      collection(firestore, "users", user.uid, "documents"),
-      orderBy("uploadDate", "desc"),
-      limit(MAX_COMMENCEMENTS)
+      collection(firestore, COLLECTION_NAME),
+      where("type", "==", DOC_TYPE)
     );
   }, [user, firestore]);
 
   const { data, isLoading } = useCollection<CommencementDoc>(queryRef);
 
-  const commencements = (data ?? []).filter(d => d.type === "mine-commencements");
+  const commencements = (data ?? [])
+    .filter((d) => d.type === DOC_TYPE)
+    .sort((a, b) => {
+      const aTime = a.uploadDate?.toDate ? a.uploadDate.toDate().getTime() : 0;
+      const bTime = b.uploadDate?.toDate ? b.uploadDate.toDate().getTime() : 0;
+      return bTime - aTime;
+    })
+    .slice(0, MAX_COMMENCEMENTS);
 
-  const uploadFile = (file: File) => {
-    if (!user || !firestore || !storage) return;
+  const uploadFile = async (file: File) => {
+    if (isUserLoading) {
+      toast({ title: "Please wait", description: "Sign-in is still finishing. Try the upload again in a moment." });
+      return;
+    }
+    if (!user || !firestore || !storage) {
+      console.error("Commencement upload blocked: user or Firebase services are not ready.");
+      toast({ variant: "destructive", title: "Authentication Error", description: "You must be signed in to upload documents." });
+      return;
+    }
 
     setUploading(true);
     setProgress(0);
 
-    const safeName = file.name.replace(/[^\w.\-() ]+/g, "_");
-    const storagePath = `users/${user.uid}/documents/commencements/${Date.now()}_${safeName}`;
-    const storageRef = ref(storage, storagePath);
-
-    const task = uploadBytesResumable(storageRef, file);
-
-    task.on(
-      "state_changed",
-      s => setProgress((s.bytesTransferred / s.totalBytes) * 100),
-      err => {
-        console.error("Upload error:", err);
-        setUploading(false);
-        toast({ variant: "destructive", title: "Upload failed", description: err.message });
-      },
-      async () => {
-        try {
-          const fileUrl = await getDownloadURL(task.snapshot.ref);
-          await addDoc(collection(firestore, "users", user.uid, "documents"), {
-            userId: user.uid,
-            type: "mine-commencements",
-            documentName: file.name,
-            fileUrl,
-            storagePath,
-            fileSize: file.size,
-            uploadDate: serverTimestamp(),
-          });
-          toast({ title: "Uploaded", description: `"${file.name}" saved.` });
-        } catch (e: any) {
-          console.error("Failed to save commencement document:", e);
-          toast({ variant: "destructive", title: "Save failed", description: e?.message ?? String(e) });
-        } finally {
-          setUploading(false);
-          setProgress(0);
-        }
-      }
-    );
+    try {
+      await uploadDocumentRecord({
+        storage,
+        firestore,
+        collectionName: COLLECTION_NAME,
+        folder: FOLDER_NAME,
+        file,
+        userId: user.uid,
+        type: DOC_TYPE,
+        category: CATEGORY_NAME,
+        companyId: profile?.companyId || "comp_test_001",
+        mshaMineId: selectedMineId,
+        onProgress: setProgress,
+      });
+      toast({ title: "Uploaded", description: `"${file.name}" saved.` });
+    } catch (error: unknown) {
+      console.error("Failed to upload commencement document:", error);
+      toast({ variant: "destructive", title: "Upload failed", description: formatUploadError(error) });
+    } finally {
+      setUploading(false);
+      setProgress(0);
+    }
   };
 
   const onChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -118,12 +123,20 @@ export function CommencementsCard() {
     if (!user || !firestore || !storage) return;
 
     try {
-      await deleteObject(ref(storage, docData.storagePath));
-    } catch (error) {
+      await deleteStorageObject(storage, docData.storagePath);
+    } catch (error: unknown) {
       console.error("Error deleting storage object:", error);
+      toast({ variant: "destructive", title: "Delete failed", description: formatUploadError(error) });
+      return;
     }
 
-    await deleteDoc(doc(firestore, "users", user.uid, "documents", docData.id));
+    try {
+      await deleteDoc(doc(firestore, COLLECTION_NAME, docData.id));
+    } catch (error: unknown) {
+      console.error("Failed to delete commencement record:", error);
+      toast({ variant: "destructive", title: "Delete failed", description: formatUploadError(error) });
+      return;
+    }
     toast({ title: "Deleted", description: "Commencement removed." });
   };
 

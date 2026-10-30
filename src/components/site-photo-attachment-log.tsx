@@ -20,10 +20,15 @@ import {
   doc,
   deleteDoc,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useFirestore, useStorage } from '@/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import {
+  deleteStorageObject,
+  formatUploadError,
+  sanitizeStorageFileName,
+  uploadFileResumable,
+} from '@/lib/upload-document';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,9 +48,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
-
 export interface ExamAttachmentRecord {
   id: string;
   companyId: string;
@@ -56,6 +58,7 @@ export interface ExamAttachmentRecord {
   area: string;
   notes: string;
   examinerName: string;
+  storagePath?: string;
   createdAt: string;
 }
 
@@ -68,7 +71,7 @@ export function SitePhotoAttachmentLog({
 }: SitePhotoAttachmentLogProps) {
   const firestore = useFirestore();
   const storage = useStorage();
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const examinerName = user?.isAnonymous
@@ -126,6 +129,7 @@ export function SitePhotoAttachmentLog({
             area: data.area || '—',
             notes: data.notes || '',
             examinerName: data.examinerName || '—',
+            storagePath: data.storagePath || '',
             createdAt: data.createdAt || '',
           };
         });
@@ -176,7 +180,26 @@ export function SitePhotoAttachmentLog({
   const handleUploadAttachment = async (e: FormEvent) => {
     e.preventDefault();
 
+    if (authLoading) {
+      toast({
+        title: 'Please wait',
+        description: 'Sign-in is still finishing. Try the upload again in a moment.',
+      });
+      return;
+    }
+
+    if (!user) {
+      console.error('Site attachment upload blocked: no authenticated user.');
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'You must be signed in before uploading site photos.',
+      });
+      return;
+    }
+
     if (!firestore || !storage) {
+      console.error('Site attachment upload blocked: Firebase services are not ready.');
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -211,32 +234,29 @@ export function SitePhotoAttachmentLog({
 
     setIsUploading(true);
 
+    const safeName = sanitizeStorageFileName(selectedFile.name);
+    const mineSegment = selectedMineId.replace(/[^\w.\-]+/g, '_');
+    const storagePath = `site_photos/${mineSegment}/${Date.now()}_${safeName}`;
+    let stored = false;
+
     try {
-      // Step 1: Create a reference in Firebase Storage under site_photos/{selectedMineId}/{timestamp}_{fileName}
-      const storagePath = `site_photos/${selectedMineId}/${Date.now()}_${selectedFile.name}`;
-      const storageRef = ref(storage, storagePath);
+      const { downloadUrl } = await uploadFileResumable(storage, storagePath, selectedFile);
+      stored = true;
 
-      // Step 2: Upload the file bytes to Firebase Storage
-      const uploadSnapshot = await uploadBytes(storageRef, selectedFile);
-
-      // Step 3: Get the public download URL for the uploaded file
-      const downloadUrl = await getDownloadURL(uploadSnapshot.ref);
-
-      // Step 4: Construct the metadata record for the "exam_attachments" Firestore collection
       const attachmentData = {
         companyId: profile?.companyId || 'comp_test_001',
         mshaMineId: selectedMineId,
-        userId: user?.uid || 'guest_user',
+        userId: user.uid,
         fileUrl: downloadUrl,
         fileName: selectedFile.name,
         fileType: selectedFile.type || 'application/octet-stream',
+        storagePath,
         area: areaInput.trim(),
         notes: notesInput.trim(),
         examinerName: resolvedExaminer,
         createdAt: new Date().toISOString(),
       };
 
-      // Step 5: Save the attachment metadata record to Firestore
       const attachmentsCollection = collection(firestore, 'exam_attachments');
       await addDoc(attachmentsCollection, attachmentData);
 
@@ -254,19 +274,19 @@ export function SitePhotoAttachmentLog({
           ? profile?.fullName || 'Guest Supervisor'
           : profile?.fullName || user?.displayName || 'Jed McGinnis'
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error uploading and logging site attachment:', error);
-      errorEmitter.emit(
-        'permission-error',
-        new FirestorePermissionError({
-          path: 'exam_attachments',
-          operation: 'create',
-        })
-      );
+      if (stored) {
+        try {
+          await deleteStorageObject(storage, storagePath);
+        } catch (cleanupError) {
+          console.error('Failed to remove orphaned site photo after Firestore write failed:', cleanupError);
+        }
+      }
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
-        description: error.message || 'Could not upload and log attachment.',
+        description: formatUploadError(error),
       });
     } finally {
       setIsUploading(false);
@@ -282,10 +302,11 @@ export function SitePhotoAttachmentLog({
   };
 
   // Delete an attachment record from Firestore
-  const handleDeleteAttachment = async (recordId: string) => {
-    if (!firestore) return;
+  const handleDeleteAttachment = async (record: ExamAttachmentRecord) => {
+    if (!firestore || !storage) return;
     try {
-      const docRef = doc(firestore, 'exam_attachments', recordId);
+      await deleteStorageObject(storage, record.storagePath);
+      const docRef = doc(firestore, 'exam_attachments', record.id);
       await deleteDoc(docRef);
       toast({
         title: 'Attachment Deleted',
@@ -508,7 +529,7 @@ export function SitePhotoAttachmentLog({
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteAttachment(record.id)}
+                          onClick={() => handleDeleteAttachment(record)}
                         >
                           <Trash2 className="mr-1 h-4 w-4" />
                           Delete

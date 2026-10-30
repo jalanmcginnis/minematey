@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, ChangeEvent, FormEvent } from 'react';
+import { useState, useRef, ChangeEvent, FormEvent } from 'react';
 import {
   Plus,
   Eye,
@@ -12,9 +12,15 @@ import {
   ChevronUp,
   LucideIcon,
 } from 'lucide-react';
-import { collection, addDoc, doc, deleteDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { useFirestore, useStorage } from '@/firebase';
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import {
+  deleteStorageObject,
+  formatUploadError,
+  uploadDocumentRecord,
+} from '@/lib/upload-document';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,9 +32,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
-
 export interface TrainingDocRecord {
   id: string;
   companyId: string;
@@ -39,6 +42,8 @@ export interface TrainingDocRecord {
   completionDate: string;
   expirationDate: string | null;
   fileName: string;
+  fileUrl?: string;
+  storagePath?: string;
   createdAt: string;
 }
 
@@ -64,6 +69,8 @@ export function TrainingDocumentCategoryCard({
   onViewRecord,
 }: TrainingDocumentCategoryCardProps) {
   const firestore = useFirestore();
+  const storage = useStorage();
+  const { user, profile, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const isTrainingPlan =
@@ -75,6 +82,7 @@ export function TrainingDocumentCategoryCard({
   const [completionDateInput, setCompletionDateInput] = useState(todayStr);
   const [expirationDateInput, setExpirationDateInput] = useState('');
   const [fileInput, setFileInput] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormExpanded, setIsFormExpanded] = useState(true);
 
@@ -86,11 +94,30 @@ export function TrainingDocumentCategoryCard({
   const handleSaveRecord = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!firestore) {
+    if (authLoading) {
+      toast({
+        title: 'Please wait',
+        description: 'Sign-in is still finishing. Try the upload again in a moment.',
+      });
+      return;
+    }
+
+    if (!user) {
+      console.error('Training document upload blocked: no authenticated user.');
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'You must be signed in before uploading training documents.',
+      });
+      return;
+    }
+
+    if (!firestore || !storage) {
+      console.error('Training document upload blocked: Firebase services are not ready.');
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Database is not available.',
+        description: 'Firebase Storage or Firestore is not available.',
       });
       return;
     }
@@ -106,24 +133,35 @@ export function TrainingDocumentCategoryCard({
       return;
     }
 
+    if (!fileInput) {
+      toast({
+        variant: 'destructive',
+        title: 'File Required',
+        description: 'Choose a certificate or training plan file to upload.',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
-    const trainingDocsCollection = collection(firestore, 'training_documents');
-
-    const newRecord = {
-      companyId: 'comp_test_001',
-      mshaMineId: selectedMineId,
-      category: categoryName,
-      documentTitle: titleInput.trim(),
-      minerName: isTrainingPlan ? '' : minerNameInput.trim() || '',
-      completionDate: completionDateInput || todayStr,
-      expirationDate: isTrainingPlan ? null : expirationDateInput ? expirationDateInput : null,
-      fileName: fileInput?.name || (isTrainingPlan ? 'training-plan.pdf' : 'certificate.pdf'),
-      createdAt: new Date().toISOString(),
-    };
-
     try {
-      await addDoc(trainingDocsCollection, newRecord);
+      await uploadDocumentRecord({
+        storage,
+        firestore,
+        collectionName: 'training_documents',
+        folder: categoryName,
+        file: fileInput,
+        userId: user.uid,
+        type: categoryName,
+        category: categoryName,
+        companyId: profile?.companyId || 'comp_test_001',
+        mshaMineId: selectedMineId,
+        documentTitle: titleInput.trim(),
+        minerName: isTrainingPlan ? '' : minerNameInput.trim(),
+        completionDate: completionDateInput || todayStr,
+        expirationDate: isTrainingPlan ? null : expirationDateInput || null,
+        date: completionDateInput || todayStr,
+      });
       toast({
         title: isTrainingPlan ? 'Plan Uploaded' : 'Record Saved',
         description: `"${titleInput.trim()}" saved under ${categoryName}.`,
@@ -133,41 +171,37 @@ export function TrainingDocumentCategoryCard({
       setCompletionDateInput(new Date().toISOString().split('T')[0]);
       setExpirationDateInput('');
       setFileInput(null);
-    } catch (error: any) {
-      console.error(`Error saving training record to ${categoryName}:`, error);
-      errorEmitter.emit(
-        'permission-error',
-        new FirestorePermissionError({
-          path: trainingDocsCollection.path,
-          operation: 'create',
-          requestResourceData: newRecord,
-        })
-      );
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error: unknown) {
+      console.error(`Error uploading training record to ${categoryName}:`, error);
       toast({
         variant: 'destructive',
-        title: 'Save Failed',
-        description: error.message || 'Could not save training record.',
+        title: 'Upload Failed',
+        description: formatUploadError(error),
       });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (docId: string, docTitle: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, 'training_documents', docId);
+  const handleDelete = async (record: TrainingDocRecord) => {
+    if (!firestore || !storage) return;
+    const docRef = doc(firestore, 'training_documents', record.id);
     try {
+      await deleteStorageObject(storage, record.storagePath);
       await deleteDoc(docRef);
       toast({
         title: 'Deleted',
-        description: `"${docTitle}" has been removed from ${categoryName}.`,
+        description: `"${record.documentTitle}" has been removed from ${categoryName}.`,
       });
-    } catch (error: any) {
-      console.error(`Error deleting training record ${docId} from ${categoryName}:`, error);
+    } catch (error: unknown) {
+      console.error(`Error deleting training record ${record.id} from ${categoryName}:`, error);
       toast({
         variant: 'destructive',
         title: 'Delete Failed',
-        description: error.message || 'Could not delete training record.',
+        description: formatUploadError(error),
       });
     }
   };
@@ -317,6 +351,7 @@ export function TrainingDocumentCategoryCard({
                   File Attachment
                 </Label>
                 <Input
+                  ref={fileInputRef}
                   id={`file-${categoryName}`}
                   type="file"
                   onChange={handleFileChange}
@@ -400,7 +435,7 @@ export function TrainingDocumentCategoryCard({
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(rec.id, rec.documentTitle)}
+                      onClick={() => handleDelete(rec)}
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1" />
                       Delete

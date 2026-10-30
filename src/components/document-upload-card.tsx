@@ -2,22 +2,21 @@
 
 import { ChangeEvent, useState } from 'react';
 import { useUser, useFirestore, useStorage, useCollection, useMemoFirebase } from '@/firebase';
+import { useAuth } from '@/context/AuthContext';
+import { useActiveMine } from '@/context/MineContext';
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
   query,
   where,
   limit,
-  serverTimestamp,
 } from 'firebase/firestore';
 import {
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
-} from 'firebase/storage';
+  deleteStorageObject,
+  formatUploadError,
+  uploadDocumentRecord,
+} from '@/lib/upload-document';
 import {
   Card,
   CardContent,
@@ -38,10 +37,6 @@ import {
   Download,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
-import { cn } from '@/lib/utils';
-
 interface DocumentUploadCardProps {
   documentType: string;
   title: string;
@@ -67,7 +62,9 @@ export function DocumentUploadCard({
   title,
   description,
 }: DocumentUploadCardProps) {
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
+  const { profile } = useAuth();
+  const { selectedMineId } = useActiveMine();
   const firestore = useFirestore();
   const storage = useStorage();
   const { toast } = useToast();
@@ -79,7 +76,7 @@ export function DocumentUploadCard({
   const documentQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(
-      collection(firestore, 'users', user.uid, 'documents'),
+      collection(firestore, 'required_documents'),
       where('type', '==', documentType),
       limit(1)
     );
@@ -97,105 +94,83 @@ export function DocumentUploadCard({
   };
 
   const handleUpload = async (file: File) => {
+    if (isUserLoading) {
+      toast({
+        title: 'Please wait',
+        description: 'Sign-in is still finishing. Try the upload again in a moment.',
+      });
+      return;
+    }
+
     if (!user || !storage || !firestore) {
+      console.error('Document upload blocked: user or Firebase services are not ready.', { documentType });
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
-        description: 'You must be logged in to upload documents.',
+        description: 'You must be signed in to upload documents.',
       });
       return;
     }
 
     if (document) {
-      // If a document exists, delete it first before uploading the new one.
-      await handleDelete(false); // Call handleDelete without showing a toast
+      const removed = await handleDelete(false);
+      if (!removed) return;
     }
 
     setUploading(true);
     setError(null);
     setProgress(0);
 
-    const safeName = file.name.replace(/[^\w.\-() ]+/g, '_');
-    const storagePath = `users/${user.uid}/documents/${documentType}/${Date.now()}_${safeName}`;
-    const storageRef = ref(storage, storagePath);
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setProgress(progress);
-      },
-      (error) => {
-        setUploading(false);
-        setError(`Upload failed: ${error.code ?? ''} ${error.message}`);
-        toast({
-          variant: 'destructive',
-          title: 'Upload Error',
-          description: `${error.code ?? ''} ${error.message}`,
-        });
-      },
-      async () => {
-        try {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-
-          const docsCollection = collection(firestore, 'users', user.uid, 'documents');
-          const docData = {
-            userId: user.uid,
-            documentName: file.name,
-            type: documentType,
-            fileUrl: downloadURL,
-            storagePath,
-            fileType: file.type,
-            fileSize: file.size,
-            uploadDate: serverTimestamp(),
-          };
-
-          const docRef = await addDoc(docsCollection, docData);
-
-          toast({
-            title: 'Upload Successful',
-            description: `"${file.name}" uploaded successfully.`,
-          });
-        } catch (err: any) {
-          console.error('Upload completion failed:', err);
-          setError(`Completion failed: ${err.code ?? ''} ${err.message ?? String(err)}`);
-          toast({
-            variant: 'destructive',
-            title: 'Save/URL Failed',
-            description: `${err.code ?? ''} ${err.message ?? String(err)}`,
-          });
-        } finally {
-          setUploading(false);
-        }
-      }
-    );
+    try {
+      await uploadDocumentRecord({
+        storage,
+        firestore,
+        collectionName: 'required_documents',
+        folder: documentType,
+        file,
+        userId: user.uid,
+        type: documentType,
+        category: documentType,
+        companyId: profile?.companyId || 'comp_test_001',
+        mshaMineId: selectedMineId,
+        onProgress: setProgress,
+      });
+      toast({
+        title: 'Upload Successful',
+        description: `"${file.name}" uploaded successfully.`,
+      });
+    } catch (err: unknown) {
+      console.error('Upload failed:', err);
+      const message = formatUploadError(err);
+      setError(`Upload failed: ${message}`);
+      toast({
+        variant: 'destructive',
+        title: 'Upload Failed',
+        description: message,
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const handleDelete = async (showToast = true) => {
-    if (!user || !firestore || !storage || !document) return;
+  const handleDelete = async (showToast = true): Promise<boolean> => {
+    if (!user || !firestore || !storage || !document) return false;
 
-    const docRef = doc(firestore, 'users', user.uid, 'documents', document.id);
-    const storageRef = ref(storage, document.storagePath);
+    const docRef = doc(firestore, 'required_documents', document.id);
 
     try {
-      // Attempt to delete the file from storage first.
-      await deleteObject(storageRef);
-    } catch (storageError: any) {
-        console.error('Error deleting file from storage:', storageError);
-        // If the object doesn't exist, we can ignore the error and proceed to delete the Firestore doc.
-        if (storageError.code !== 'storage/object-not-found') {
-            toast({
-                variant: 'destructive',
-                title: 'Deletion Failed',
-                description: `Could not delete the file from storage: ${storageError.message}`,
-            });
-            return; // Stop if it's an error other than not found.
-        }
+      await deleteStorageObject(storage, document.storagePath);
+    } catch (storageError: unknown) {
+      console.error('Error deleting file from storage:', storageError);
+      toast({
+        variant: 'destructive',
+        title: 'Deletion Failed',
+        description: `Could not delete the file from storage: ${formatUploadError(storageError)}`,
+      });
+      return false;
     }
 
     try {
-      // Now delete the Firestore document record.
       await deleteDoc(docRef);
       if (showToast) {
         toast({
@@ -203,12 +178,15 @@ export function DocumentUploadCard({
           description: 'The document has been successfully deleted.',
         });
       }
-    } catch (dbError: any) {
-       console.error('Error deleting document from Firestore:', dbError);
-       errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: docRef.path,
-        operation: 'delete',
-      }));
+      return true;
+    } catch (dbError: unknown) {
+      console.error('Error deleting document from Firestore:', dbError);
+      toast({
+        variant: 'destructive',
+        title: 'Deletion Failed',
+        description: formatUploadError(dbError),
+      });
+      return false;
     }
   };
 
