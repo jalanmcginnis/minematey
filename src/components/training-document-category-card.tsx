@@ -32,6 +32,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { formatCalendarDate } from '@/lib/format-calendar-date';
+
 export interface TrainingDocRecord {
   id: string;
   companyId: string;
@@ -216,11 +218,7 @@ export function TrainingDocumentCategoryCard({
     });
   };
 
-  const formatDateDisplay = (rawDate: string | null) => {
-    if (!rawDate) return '—';
-    const parsed = new Date(rawDate);
-    return isNaN(parsed.getTime()) ? rawDate : parsed.toLocaleDateString();
-  };
+  const formatDateDisplay = (rawDate: string | null) => formatCalendarDate(rawDate);
 
   return (
     <Card className="flex flex-col justify-between border shadow-sm">
@@ -410,7 +408,18 @@ export function TrainingDocumentCategoryCard({
                 >
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <p className="font-medium truncate" title={rec.documentTitle}>
-                      {rec.documentTitle}
+                      {rec.fileUrl ? (
+                        <a
+                          href={rec.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline"
+                        >
+                          {rec.documentTitle}
+                        </a>
+                      ) : (
+                        rec.documentTitle
+                      )}
                     </p>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
                       {!isTrainingPlan && (

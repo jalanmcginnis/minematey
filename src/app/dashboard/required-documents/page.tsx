@@ -37,6 +37,7 @@ import {
   RequiredDocumentCategoryCard,
   RequiredDocRecord,
 } from '@/components/required-document-category-card';
+import { formatCalendarDate } from '@/lib/format-calendar-date';
 
 interface CategoryConfig {
   name: string;
@@ -188,11 +189,7 @@ export default function RequiredDocumentsPage() {
     setIsViewDialogOpen(true);
   };
 
-  const formatDocDate = (rawDate: string) => {
-    if (!rawDate) return '—';
-    const parsed = new Date(rawDate);
-    return isNaN(parsed.getTime()) ? rawDate : parsed.toLocaleDateString();
-  };
+  const formatDocDate = (rawDate: string) => formatCalendarDate(rawDate);
 
   return (
     <div className="space-y-6">
