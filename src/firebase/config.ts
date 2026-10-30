@@ -18,7 +18,4 @@ export const firebaseConfig = {
   ...(measurementId ? { measurementId } : {}),
 };
 
-export const firestoreDatabaseId =
-  firebaseAppletConfig.firestoreDatabaseId || '(default)';
-
 export default firebaseConfig;
