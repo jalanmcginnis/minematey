@@ -282,17 +282,12 @@ export function EquipmentPhotoAttachmentLog({
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
-  // Delete an equipment attachment record from Firestore
+  // Delete the Firestore record first, then the Storage file.
   const handleDeleteAttachment = async (record: EquipmentAttachmentRecord) => {
     if (!firestore || !storage) return;
     try {
-      await deleteStorageObject(storage, record.storagePath);
       const docRef = doc(firestore, 'equipment_attachments', record.id);
       await deleteDoc(docRef);
-      toast({
-        title: 'Attachment Deleted',
-        description: 'The equipment photo/document record has been removed.',
-      });
     } catch (error: any) {
       console.error('Error deleting equipment attachment record:', error);
       toast({
@@ -300,7 +295,22 @@ export function EquipmentPhotoAttachmentLog({
         title: 'Delete Failed',
         description: error.message || 'Could not delete equipment attachment record.',
       });
+      return;
     }
+
+    try {
+      await deleteStorageObject(storage, record.storagePath);
+    } catch (error) {
+      console.error(
+        'Storage file could not be deleted after the equipment attachment record was removed:',
+        error,
+      );
+    }
+
+    toast({
+      title: 'Attachment Deleted',
+      description: 'The equipment photo/document record has been removed.',
+    });
   };
 
   const isImageRecord = (record: EquipmentAttachmentRecord) => {

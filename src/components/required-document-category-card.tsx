@@ -188,12 +188,7 @@ export function RequiredDocumentCategoryCard({
     if (!firestore || !storage) return;
     const docRef = doc(firestore, 'required_documents', docItem.id);
     try {
-      await deleteStorageObject(storage, docItem.storagePath);
       await deleteDoc(docRef);
-      toast({
-        title: 'Deleted',
-        description: `"${docItem.documentTitle}" has been removed from ${categoryName}.`,
-      });
     } catch (error: unknown) {
       console.error(`Error deleting document ${docItem.id} from ${categoryName}:`, error);
       toast({
@@ -201,7 +196,22 @@ export function RequiredDocumentCategoryCard({
         title: 'Delete Failed',
         description: formatUploadError(error),
       });
+      return;
     }
+
+    try {
+      await deleteStorageObject(storage, docItem.storagePath);
+    } catch (error: unknown) {
+      console.error(
+        `Storage file for document ${docItem.id} could not be deleted after the record was removed:`,
+        error,
+      );
+    }
+
+    toast({
+      title: 'Deleted',
+      description: `"${docItem.documentTitle}" has been removed from ${categoryName}.`,
+    });
   };
 
   const formatDateDisplay = (rawDate: string) => {

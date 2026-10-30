@@ -301,17 +301,12 @@ export function SitePhotoAttachmentLog({
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
-  // Delete an attachment record from Firestore
+  // Delete the Firestore record first, then the Storage file.
   const handleDeleteAttachment = async (record: ExamAttachmentRecord) => {
     if (!firestore || !storage) return;
     try {
-      await deleteStorageObject(storage, record.storagePath);
       const docRef = doc(firestore, 'exam_attachments', record.id);
       await deleteDoc(docRef);
-      toast({
-        title: 'Attachment Deleted',
-        description: 'The site photo/document record has been removed.',
-      });
     } catch (error: any) {
       console.error('Error deleting attachment record:', error);
       toast({
@@ -319,7 +314,22 @@ export function SitePhotoAttachmentLog({
         title: 'Delete Failed',
         description: error.message || 'Could not delete attachment record.',
       });
+      return;
     }
+
+    try {
+      await deleteStorageObject(storage, record.storagePath);
+    } catch (error) {
+      console.error(
+        'Storage file could not be deleted after the site attachment record was removed:',
+        error,
+      );
+    }
+
+    toast({
+      title: 'Attachment Deleted',
+      description: 'The site photo/document record has been removed.',
+    });
   };
 
   const isImageRecord = (record: ExamAttachmentRecord) => {

@@ -190,12 +190,7 @@ export function TrainingDocumentCategoryCard({
     if (!firestore || !storage) return;
     const docRef = doc(firestore, 'training_documents', record.id);
     try {
-      await deleteStorageObject(storage, record.storagePath);
       await deleteDoc(docRef);
-      toast({
-        title: 'Deleted',
-        description: `"${record.documentTitle}" has been removed from ${categoryName}.`,
-      });
     } catch (error: unknown) {
       console.error(`Error deleting training record ${record.id} from ${categoryName}:`, error);
       toast({
@@ -203,7 +198,22 @@ export function TrainingDocumentCategoryCard({
         title: 'Delete Failed',
         description: formatUploadError(error),
       });
+      return;
     }
+
+    try {
+      await deleteStorageObject(storage, record.storagePath);
+    } catch (error: unknown) {
+      console.error(
+        `Storage file for training record ${record.id} could not be deleted after the record was removed:`,
+        error,
+      );
+    }
+
+    toast({
+      title: 'Deleted',
+      description: `"${record.documentTitle}" has been removed from ${categoryName}.`,
+    });
   };
 
   const formatDateDisplay = (rawDate: string | null) => {
