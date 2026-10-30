@@ -61,5 +61,15 @@ service cloud.firestore {
     match /user_profiles/{userId} {
       allow read, write: if true;
     }
+
+    // Company mine sites collection supporting multi-tenancy
+    match /mines/{mineId} {
+      allow read, write: if true;
+    }
+
+    // Companies collection storing subscription plan tiers and seat/mine limits
+    match /companies/{companyId} {
+      allow read, write: if true;
+    }
   }
 }

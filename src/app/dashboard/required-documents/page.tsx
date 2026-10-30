@@ -157,6 +157,8 @@ export default function RequiredDocumentsPage() {
             category: data.category || '',
             documentTitle: data.documentTitle || 'Untitled Document',
             fileName: data.fileName || 'document.pdf',
+            fileUrl: data.fileUrl || '',
+            storagePath: data.storagePath || '',
             date: data.date || data.createdAt || '',
             createdAt: data.createdAt || '',
           };
@@ -252,7 +254,20 @@ export default function RequiredDocumentsPage() {
               </div>
               <div className="grid grid-cols-3 items-center gap-4">
                 <span className="font-semibold text-muted-foreground">File Name:</span>
-                <span className="col-span-2">{viewingDoc.fileName || 'document.pdf'}</span>
+                <span className="col-span-2">
+                  {viewingDoc.fileUrl ? (
+                    <a
+                      href={viewingDoc.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                    >
+                      {viewingDoc.fileName || 'Open file'}
+                    </a>
+                  ) : (
+                    viewingDoc.fileName || 'No file stored'
+                  )}
+                </span>
               </div>
               <div className="grid grid-cols-3 items-center gap-4">
                 <span className="font-semibold text-muted-foreground">Effective Date:</span>

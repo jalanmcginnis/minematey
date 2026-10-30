@@ -15,9 +15,15 @@ import {
   AlertTriangle,
   LucideIcon,
 } from 'lucide-react';
-import { collection, addDoc, doc, deleteDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { useFirestore, useStorage } from '@/firebase';
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import {
+  deleteStorageObject,
+  formatUploadError,
+  uploadDocumentRecord,
+} from '@/lib/upload-document';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,8 +35,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { getNextQuarterlyReportDeadline } from '@/lib/msha-quarterly-deadline';
 
 export interface RequiredDocRecord {
@@ -40,6 +44,8 @@ export interface RequiredDocRecord {
   category: string;
   documentTitle: string;
   fileName: string;
+  fileUrl?: string;
+  storagePath?: string;
   date: string;
   createdAt: string;
 }
@@ -64,6 +70,8 @@ export function RequiredDocumentCategoryCard({
   onViewDocument,
 }: RequiredDocumentCategoryCardProps) {
   const firestore = useFirestore();
+  const storage = useStorage();
+  const { user, profile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -87,11 +95,30 @@ export function RequiredDocumentCategoryCard({
   const handleAddDocument = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!firestore) {
+    if (authLoading) {
+      toast({
+        title: 'Please wait',
+        description: 'Sign-in is still finishing. Try the upload again in a moment.',
+      });
+      return;
+    }
+
+    if (!user) {
+      console.error('Required document upload blocked: no authenticated user.');
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'You must be signed in before uploading documents.',
+      });
+      return;
+    }
+
+    if (!firestore || !storage) {
+      console.error('Required document upload blocked: Firebase services are not ready.');
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Database is not available.',
+        description: 'Firebase Storage or Firestore is not available.',
       });
       return;
     }
@@ -107,24 +134,34 @@ export function RequiredDocumentCategoryCard({
       return;
     }
 
+    if (!fileInput) {
+      toast({
+        variant: 'destructive',
+        title: 'File Required',
+        description: 'Choose a PDF or image to upload.',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
-    const requiredDocsCollection = collection(firestore, 'required_documents');
     const submissionDateValue = dateInput || new Date().toISOString().split('T')[0];
 
-    const newRecord = {
-      companyId: 'comp_test_001',
-      mshaMineId: selectedMineId,
-      category: categoryName,
-      documentTitle: titleInput.trim(),
-      fileName: fileInput?.name || 'document.pdf',
-      date: submissionDateValue,
-      submissionDate: submissionDateValue,
-      createdAt: new Date().toISOString(),
-    };
-
     try {
-      await addDoc(requiredDocsCollection, newRecord);
+      await uploadDocumentRecord({
+        storage,
+        firestore,
+        collectionName: 'required_documents',
+        folder: categoryName,
+        file: fileInput,
+        userId: user.uid,
+        type: categoryName,
+        category: categoryName,
+        companyId: profile?.companyId || 'comp_test_001',
+        mshaMineId: selectedMineId,
+        documentTitle: titleInput.trim(),
+        date: submissionDateValue,
+      });
       toast({
         title: isQuarterlyReportsCard ? 'Report Uploaded' : 'Document Added',
         description: `"${titleInput.trim()}" saved to ${categoryName}.`,
@@ -135,41 +172,34 @@ export function RequiredDocumentCategoryCard({
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-    } catch (error: any) {
-      console.error(`Error adding document to ${categoryName}:`, error);
-      errorEmitter.emit(
-        'permission-error',
-        new FirestorePermissionError({
-          path: requiredDocsCollection.path,
-          operation: 'create',
-          requestResourceData: newRecord,
-        })
-      );
+    } catch (error: unknown) {
+      console.error(`Error uploading document to ${categoryName}:`, error);
       toast({
         variant: 'destructive',
-        title: 'Save Failed',
-        description: error.message || 'Could not save document.',
+        title: 'Upload Failed',
+        description: formatUploadError(error),
       });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (docId: string, docTitle: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, 'required_documents', docId);
+  const handleDelete = async (docItem: RequiredDocRecord) => {
+    if (!firestore || !storage) return;
+    const docRef = doc(firestore, 'required_documents', docItem.id);
     try {
+      await deleteStorageObject(storage, docItem.storagePath);
       await deleteDoc(docRef);
       toast({
         title: 'Deleted',
-        description: `"${docTitle}" has been removed from ${categoryName}.`,
+        description: `"${docItem.documentTitle}" has been removed from ${categoryName}.`,
       });
-    } catch (error: any) {
-      console.error(`Error deleting document ${docId} from ${categoryName}:`, error);
+    } catch (error: unknown) {
+      console.error(`Error deleting document ${docItem.id} from ${categoryName}:`, error);
       toast({
         variant: 'destructive',
         title: 'Delete Failed',
-        description: error.message || 'Could not delete document.',
+        description: formatUploadError(error),
       });
     }
   };
@@ -451,7 +481,7 @@ export function RequiredDocumentCategoryCard({
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(docItem.id, docItem.documentTitle)}
+                      onClick={() => handleDelete(docItem)}
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1" />
                       Delete

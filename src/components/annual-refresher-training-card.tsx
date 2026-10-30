@@ -2,17 +2,16 @@
 
 import { ChangeEvent, useState } from "react";
 import { useUser, useFirestore, useStorage, useCollection, useMemoFirebase } from "@/firebase";
+import { useAuth } from "@/context/AuthContext";
+import { useActiveMine } from "@/context/MineContext";
 import {
-  addDoc,
-  collection,
   deleteDoc,
   doc,
-  limit,
-  orderBy,
   query,
-  serverTimestamp,
+  where,
+  collection,
 } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { deleteStorageObject, formatUploadError, uploadDocumentRecord } from "@/lib/upload-document";
 import {
   Card,
   CardContent,
@@ -44,9 +43,13 @@ type DocType = {
 const MAX_DOCS = 100;
 const DOC_TYPE = "annual-refresher";
 const FOLDER_NAME = "annual-refresher";
+const CATEGORY_NAME = "Annual Refresher Training (8 hr)";
+const COLLECTION_NAME = "training_documents" as const;
 
 export function AnnualRefresherTrainingCard() {
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
+  const { profile } = useAuth();
+  const { selectedMineId } = useActiveMine();
   const firestore = useFirestore();
   const storage = useStorage();
   const { toast } = useToast();
@@ -57,65 +60,58 @@ export function AnnualRefresherTrainingCard() {
   const docsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(
-      collection(firestore, "users", user.uid, "documents"),
-      orderBy("uploadDate", "desc"),
-      limit(MAX_DOCS)
+      collection(firestore, COLLECTION_NAME),
+      where("type", "==", DOC_TYPE)
     );
   }, [user, firestore]);
 
   const { data: allDocs, isLoading } = useCollection<DocType>(docsQuery);
 
-  const documents = (allDocs ?? []).filter((d) => d.type === DOC_TYPE);
+  const documents = (allDocs ?? [])
+    .filter((d) => d.type === DOC_TYPE)
+    .sort((a, b) => {
+      const aTime = a.uploadDate?.toDate ? a.uploadDate.toDate().getTime() : 0;
+      const bTime = b.uploadDate?.toDate ? b.uploadDate.toDate().getTime() : 0;
+      return bTime - aTime;
+    })
+    .slice(0, MAX_DOCS);
 
-  const handleUpload = (file: File) => {
+  const handleUpload = async (file: File) => {
+    if (isUserLoading) {
+      toast({ title: "Please wait", description: "Sign-in is still finishing. Try the upload again in a moment." });
+      return;
+    }
     if (!user || !firestore || !storage) {
-      toast({ variant: "destructive", title: "Auth Error", description: "You must be logged in." });
+      console.error("Document upload blocked: user or Firebase services are not ready.", { type: DOC_TYPE });
+      toast({ variant: "destructive", title: "Authentication Error", description: "You must be signed in to upload documents." });
       return;
     }
 
     setUploading(true);
     setProgress(0);
 
-    const safeName = file.name.replace(/[^\w.\-() ]+/g, "_");
-    const storagePath = `users/${user.uid}/documents/${FOLDER_NAME}/${Date.now()}_${safeName}`;
-    const storageRef = ref(storage, storagePath);
-
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    uploadTask.on(
-      "state_changed",
-      (snap) => setProgress((snap.bytesTransferred / snap.totalBytes) * 100),
-      (err) => {
-        console.error("Upload error:", err);
-        setUploading(false);
-        setProgress(0);
-        toast({ variant: "destructive", title: "Upload failed", description: `${err.code} ${err.message}` });
-      },
-      async () => {
-        try {
-          const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
-
-          await addDoc(collection(firestore, "users", user.uid, "documents"), {
-            userId: user.uid,
-            type: DOC_TYPE,
-            documentName: file.name,
-            fileUrl,
-            storagePath,
-            fileType: file.type,
-            fileSize: file.size,
-            uploadDate: serverTimestamp(),
-          });
-
-          toast({ title: "Uploaded", description: `"${file.name}" saved.` });
-        } catch (e: any) {
-          console.error("Failed to save training document:", e);
-          toast({ variant: "destructive", title: "Save failed", description: e.message ?? String(e) });
-        } finally {
-          setUploading(false);
-          setProgress(0);
-        }
-      }
-    );
+    try {
+      await uploadDocumentRecord({
+        storage,
+        firestore,
+        collectionName: COLLECTION_NAME,
+        folder: FOLDER_NAME,
+        file,
+        userId: user.uid,
+        type: DOC_TYPE,
+        category: CATEGORY_NAME,
+        companyId: profile?.companyId || "comp_test_001",
+        mshaMineId: selectedMineId,
+        onProgress: setProgress,
+      });
+      toast({ title: "Uploaded", description: `"${file.name}" saved.` });
+    } catch (error: unknown) {
+      console.error("Failed to upload document:", error);
+      toast({ variant: "destructive", title: "Upload failed", description: formatUploadError(error) });
+    } finally {
+      setUploading(false);
+      setProgress(0);
+    }
   };
 
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -128,16 +124,20 @@ export function AnnualRefresherTrainingCard() {
     if (!user || !firestore || !storage) return;
 
     try {
-      await deleteObject(ref(storage, r.storagePath));
-    } catch (err: any) {
+      await deleteStorageObject(storage, r.storagePath);
+    } catch (err: unknown) {
       console.error("Error deleting storage object:", err);
-      if (err.code !== "storage/object-not-found") {
-        toast({ variant: "destructive", title: "Delete failed", description: err.message });
-        return;
-      }
+      toast({ variant: "destructive", title: "Delete failed", description: formatUploadError(err) });
+      return;
     }
 
-    await deleteDoc(doc(firestore, "users", user.uid, "documents", r.id));
+    try {
+      await deleteDoc(doc(firestore, COLLECTION_NAME, r.id));
+    } catch (error: unknown) {
+      console.error("Failed to delete document record:", error);
+      toast({ variant: "destructive", title: "Delete failed", description: formatUploadError(error) });
+      return;
+    }
     toast({ title: "Deleted", description: "Document removed." });
   };
 

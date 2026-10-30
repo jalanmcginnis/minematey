@@ -1,16 +1,31 @@
 [
-    {
-      "origin": ["*"],
-      "method": ["GET", "PUT", "POST", "DELETE", "HEAD", "OPTIONS"],
-      "responseHeader": [
-        "Content-Type",
-        "Content-Length",
-        "Authorization",
-        "X-Goog-Resumable",
-        "X-Goog-Upload-Command",
-        "X-Goog-Upload-Offset",
-        "X-Goog-Upload-Status"
-      ],
-      "maxAgeSeconds": 3600
-    }
+  {
+    "origin": ["*"],
+    "method": ["GET", "PUT", "POST", "DELETE", "HEAD", "OPTIONS"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Range",
+      "Content-Encoding",
+      "Content-Disposition",
+      "Authorization",
+      "X-Firebase-Storage-XSRF",
+      "X-Goog-Resumable",
+      "X-Goog-Upload-Command",
+      "X-Goog-Upload-Header-Content-Length",
+      "X-Goog-Upload-Header-Content-Type",
+      "X-Goog-Upload-Offset",
+      "X-Goog-Upload-Protocol",
+      "X-Goog-Upload-Status",
+      "X-Goog-Upload-URL",
+      "X-Goog-Upload-Size-Received",
+      "x-goog-generation",
+      "x-goog-metageneration",
+      "x-goog-hash",
+      "x-goog-storage-class",
+      "x-goog-stored-content-length",
+      "x-goog-stored-content-encoding"
+    ],
+    "maxAgeSeconds": 3600
+  }
 ]

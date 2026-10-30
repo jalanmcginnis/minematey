@@ -13,5 +13,12 @@ service firebase.storage {
     match /equipment_photos/{allPaths=**} {
       allow read, write: if true;
     }
+    // Shared compliance files. Open during testing, same as the collections above.
+    match /required_documents/{allPaths=**} {
+      allow read, write: if true;
+    }
+    match /training_documents/{allPaths=**} {
+      allow read, write: if true;
+    }
   }
 }

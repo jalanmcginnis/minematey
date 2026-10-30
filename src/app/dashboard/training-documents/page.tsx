@@ -108,6 +108,8 @@ export default function TrainingDocumentsPage() {
             completionDate: data.completionDate || data.createdAt || '',
             expirationDate: data.expirationDate || null,
             fileName: data.fileName || 'certificate.pdf',
+            fileUrl: data.fileUrl || '',
+            storagePath: data.storagePath || '',
             createdAt: data.createdAt || '',
           };
         });
@@ -236,7 +238,20 @@ export default function TrainingDocumentsPage() {
               )}
               <div className="grid grid-cols-3 items-center gap-4">
                 <span className="font-semibold text-muted-foreground">File Attachment:</span>
-                <span className="col-span-2">{viewingRecord.fileName || 'certificate.pdf'}</span>
+                <span className="col-span-2">
+                  {viewingRecord.fileUrl ? (
+                    <a
+                      href={viewingRecord.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                    >
+                      {viewingRecord.fileName || 'Open file'}
+                    </a>
+                  ) : (
+                    viewingRecord.fileName || 'No file stored'
+                  )}
+                </span>
               </div>
               <div className="grid grid-cols-3 items-center gap-4">
                 <span className="font-semibold text-muted-foreground">MSHA Mine ID:</span>

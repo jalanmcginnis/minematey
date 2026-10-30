@@ -12,6 +12,21 @@ import {
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig } from './config';
 
+const STORAGE_BUCKET_PATTERN = /^[a-z0-9][a-z0-9.\-]*\.(appspot\.com|firebasestorage\.app)$/i;
+
+function resolveStorageBucket(bucket: string | undefined): string {
+  const normalized = (bucket || '').trim().replace(/^gs:\/\//, '');
+  if (!STORAGE_BUCKET_PATTERN.test(normalized)) {
+    console.error(
+      'Firebase storageBucket is missing or not in <project>.appspot.com / <project>.firebasestorage.app form:',
+      normalized || '(empty)',
+    );
+  }
+  return normalized;
+}
+
+const storageBucketName = resolveStorageBucket(firebaseConfig.storageBucket);
+
 const globalForFirebase = globalThis as unknown as {
   __mineMateyDb?: Firestore;
 };
@@ -42,7 +57,9 @@ if (globalForFirebase.__mineMateyDb) {
 
 const firestore: Firestore = db;
 const auth: Auth = getAuth(app);
-const storage: FirebaseStorage = getStorage(app);
+const storage: FirebaseStorage = storageBucketName
+  ? getStorage(app, `gs://${storageBucketName}`)
+  : getStorage(app);
 
 /**
  * Returns the initialized Firebase services.
@@ -68,5 +85,4 @@ export * from './firestore/use-doc';
 export * from './non-blocking-login';
 export * from './errors';
 export * from './error-emitter';
-export * from './auth/use-user';
 
