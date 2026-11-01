@@ -156,7 +156,7 @@ export default function RequiredDocumentsPage() {
             companyId: data.companyId || 'comp_test_001',
             mshaMineId: data.mshaMineId || selectedMineId,
             category: data.category || '',
-            documentTitle: data.documentTitle || 'Untitled Document',
+            documentTitle: data.documentTitle || data.documentName || 'Untitled Document',
             fileName: data.fileName || 'document.pdf',
             fileUrl: data.fileUrl || '',
             storagePath: data.storagePath || '',
