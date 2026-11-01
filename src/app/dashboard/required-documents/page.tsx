@@ -45,7 +45,7 @@ interface CategoryConfig {
   icon: LucideIcon;
 }
 
-export const REQUIRED_DOCUMENT_CATEGORIES: CategoryConfig[] = [
+const REQUIRED_DOCUMENT_CATEGORIES: CategoryConfig[] = [
   {
     name: 'Legal Identity',
     description: 'MSHA Form 2000-7 Legal Identity Report & updates.',

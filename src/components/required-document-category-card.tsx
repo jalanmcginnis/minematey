@@ -522,9 +522,9 @@ export function RequiredDocumentCategoryCard({
                       {selectedDocument.fileName && (
                         <>
                           <span>•</span>
-                          <span className="inline-flex items-center gap-1 truncate">
+                          <span className="inline-flex min-w-0 max-w-full items-center gap-1">
                             <FileText className="h-3 w-3 shrink-0" />
-                            {selectedDocument.fileName}
+                            <span className="truncate">{selectedDocument.fileName}</span>
                           </span>
                         </>
                       )}
