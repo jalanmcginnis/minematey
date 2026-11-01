@@ -4,7 +4,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, signInAnonymously } from 'firebase/auth';
-import { AlertCircle, Loader2, ShieldCheck, UserCheck } from 'lucide-react';
+import { AlertCircle, Loader2, UserCheck } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +20,15 @@ import { Separator } from '@/components/ui/separator';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useAuth } from '@/context/AuthContext';
 
-export function Login() {
+type LoginProps = {
+  headingFontClassName?: string;
+  bodyFontClassName?: string;
+};
+
+export function Login({
+  headingFontClassName = '',
+  bodyFontClassName = '',
+}: LoginProps) {
   const loginBg = PlaceHolderImages.find((img) => img.id === 'login-background');
   const { user, loading, auth } = useAuth();
   const router = useRouter();
@@ -94,33 +102,42 @@ export function Login() {
 
   if (loading || user) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div
+        className={`flex h-screen w-full items-center justify-center bg-[#F8F9FA] ${bodyFontClassName}`}
+      >
+        <Loader2 className="h-8 w-8 animate-spin text-[#F28C28]" />
       </div>
     );
   }
 
   return (
-    <div className="w-full lg:grid lg:min-h-screen lg:grid-cols-2">
-      <div className="flex items-center justify-center py-12 px-4 bg-background">
+    <div className={`w-full min-h-screen lg:grid lg:min-h-screen lg:grid-cols-2 ${bodyFontClassName}`}>
+      <div className="flex min-h-screen items-center justify-center bg-[#F8F9FA] px-4 py-8 text-[#343A40] sm:px-6 lg:py-12">
         <div className="mx-auto grid w-full max-w-[400px] gap-6">
-          <div className="grid gap-2 text-center">
-            <h1 className="text-3xl font-bold font-headline text-secondary">
-              Mine Matey
+          <div className="grid justify-items-center gap-3 text-center">
+            <Image
+              src="/minematey-logo.png"
+              alt="MineMatey logo"
+              width={176}
+              height={191}
+              priority
+              className="h-auto w-36 sm:w-44"
+            />
+            <h1 className={`text-3xl font-bold tracking-tight text-[#343A40] ${headingFontClassName}`}>
+              MineMatey
             </h1>
-            <p className="text-balance text-sm text-textSecondary">
+            <p className="text-balance text-sm text-[#6C757D]">
               Simplify &amp; Digitalize MSHA Safety Compliance
             </p>
           </div>
 
-          <Card className="border shadow-sm">
+          <Card className="border border-[#6C757D]/25 bg-white shadow-sm">
             <CardHeader className="pb-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-primary" />
-                Supervisor &amp; Admin Portal
+              <CardTitle className={`text-xl text-[#343A40] ${headingFontClassName}`}>
+                Login to MineMatey
               </CardTitle>
-              <CardDescription className="text-xs">
-                Sign in with your assigned Mine Matey credentials or launch the preview environment.
+              <CardDescription className="text-xs text-[#6C757D]">
+                Sign in with your assigned MineMatey credentials or launch the preview environment.
               </CardDescription>
             </CardHeader>
 
@@ -137,7 +154,7 @@ export function Login() {
 
               <form onSubmit={handleEmailSignIn} className="grid gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email" className="text-[#343A40]">Email</Label>
                   <Input
                     id="email"
                     type="email"
@@ -146,11 +163,12 @@ export function Login() {
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete="email"
                     required
+                    className="bg-white focus-visible:ring-[#F28C28]"
                   />
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password" className="text-[#343A40]">Password</Label>
                   <Input
                     id="password"
                     type="password"
@@ -159,12 +177,13 @@ export function Login() {
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
                     required
+                    className="bg-white focus-visible:ring-[#F28C28]"
                   />
                 </div>
 
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full bg-[#F28C28] text-white hover:bg-[#F28C28]/90"
                   disabled={isSigningInEmail || isSigningInGuest}
                 >
                   {isSigningInEmail ? (
@@ -173,7 +192,7 @@ export function Login() {
                       Signing In...
                     </>
                   ) : (
-                    'Sign In as Admin / Supervisor'
+                    'Sign In'
                   )}
                 </Button>
               </form>
@@ -183,7 +202,7 @@ export function Login() {
                   <Separator className="w-full" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
+                  <span className="bg-white px-2 text-[#6C757D]">
                     Or Bypass Login
                   </span>
                 </div>
@@ -192,7 +211,7 @@ export function Login() {
               <Button
                 type="button"
                 variant="secondary"
-                className="w-full"
+                className="w-full border border-[#6C757D]/40 bg-white text-[#343A40] hover:bg-[#F8F9FA]"
                 onClick={handleGuestSignIn}
                 disabled={isSigningInEmail || isSigningInGuest}
               >
@@ -204,7 +223,7 @@ export function Login() {
                 ) : (
                   <>
                     <UserCheck className="mr-2 h-4 w-4" />
-                    Continue as Guest / Dev Preview
+                    Continue as Guest
                   </>
                 )}
               </Button>
