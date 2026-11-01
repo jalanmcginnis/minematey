@@ -45,7 +45,7 @@ interface CategoryConfig {
   icon: LucideIcon;
 }
 
-export const REQUIRED_DOCUMENT_CATEGORIES: CategoryConfig[] = [
+const REQUIRED_DOCUMENT_CATEGORIES: CategoryConfig[] = [
   {
     name: 'Legal Identity',
     description: 'MSHA Form 2000-7 Legal Identity Report & updates.',
@@ -156,7 +156,7 @@ export default function RequiredDocumentsPage() {
             companyId: data.companyId || 'comp_test_001',
             mshaMineId: data.mshaMineId || selectedMineId,
             category: data.category || '',
-            documentTitle: data.documentTitle || 'Untitled Document',
+            documentTitle: data.documentTitle || data.documentName || 'Untitled Document',
             fileName: data.fileName || 'document.pdf',
             fileUrl: data.fileUrl || '',
             storagePath: data.storagePath || '',

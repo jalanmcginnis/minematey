@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, ChangeEvent, FormEvent } from 'react';
+import { useEffect, useState, useRef, ChangeEvent, FormEvent } from 'react';
 import {
   FileText,
   Plus,
@@ -35,8 +35,27 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { formatCalendarDate } from '@/lib/format-calendar-date';
 import { getNextQuarterlyReportDeadline } from '@/lib/msha-quarterly-deadline';
+
+function documentOptionLabel(docItem: RequiredDocRecord): string {
+  return docItem.documentTitle?.trim() || 'Untitled Document';
+}
+
+/** Newest saved document first. `createdAt` is an upload timestamp; document date is the fallback. */
+function documentNewestTime(docItem: RequiredDocRecord): number {
+  const created = Date.parse(docItem.createdAt || '');
+  if (!Number.isNaN(created)) return created;
+  const dated = Date.parse(docItem.date || '');
+  return Number.isNaN(dated) ? 0 : dated;
+}
 
 export interface RequiredDocRecord {
   id: string;
@@ -87,6 +106,20 @@ export function RequiredDocumentCategoryCard({
   const [fileInput, setFileInput] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormExpanded, setIsFormExpanded] = useState(true);
+  const [selectedDocumentId, setSelectedDocumentId] = useState('');
+
+  const sortedDocuments = [...documents].sort(
+    (a, b) => documentNewestTime(b) - documentNewestTime(a) || a.id.localeCompare(b.id),
+  );
+  const selectedDocument =
+    sortedDocuments.find((docItem) => docItem.id === selectedDocumentId) ?? null;
+  const selectPlaceholder = `Select a document (${documents.length})`;
+
+  useEffect(() => {
+    if (selectedDocumentId && !documents.some((docItem) => docItem.id === selectedDocumentId)) {
+      setSelectedDocumentId('');
+    }
+  }, [documents, selectedDocumentId]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
@@ -209,6 +242,7 @@ export function RequiredDocumentCategoryCard({
       );
     }
 
+    setSelectedDocumentId((current) => (current === docItem.id ? '' : current));
     toast({
       title: 'Deleted',
       description: `"${docItem.documentTitle}" has been removed from ${categoryName}.`,
@@ -432,7 +466,7 @@ export function RequiredDocumentCategoryCard({
         </div>
 
         {/* Document History List */}
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <div className="text-xs font-medium text-muted-foreground">
             {isQuarterlyReportsCard
               ? `Uploaded Quarterly Reports (${documents.length})`
@@ -443,40 +477,54 @@ export function RequiredDocumentCategoryCard({
             <p className="text-xs text-muted-foreground py-3 text-center">
               Loading documents...
             </p>
-          ) : documents.length > 0 ? (
-            <ul className="divide-y rounded-md border bg-background max-h-52 overflow-y-auto">
-              {documents.map((docItem) => (
-                <li
-                  key={docItem.id}
-                  className="flex items-center justify-between gap-2 p-2.5 text-xs"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate" title={docItem.documentTitle}>
-                      {docItem.fileUrl ? (
+          ) : sortedDocuments.length > 0 ? (
+            <>
+              <Select
+                key={selectedDocumentId ? 'selected' : 'empty'}
+                value={selectedDocumentId || undefined}
+                onValueChange={setSelectedDocumentId}
+              >
+                <SelectTrigger className="h-8 w-full min-w-0 text-xs" aria-label={selectPlaceholder}>
+                  <SelectValue placeholder={selectPlaceholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortedDocuments.map((docItem) => (
+                    <SelectItem key={docItem.id} value={docItem.id} className="text-xs">
+                      {documentOptionLabel(docItem)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {selectedDocument && (
+                <div className="flex min-w-0 flex-col gap-2 rounded-md border bg-background p-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 space-y-0.5 sm:flex-1">
+                    <p className="font-medium truncate" title={selectedDocument.documentTitle}>
+                      {selectedDocument.fileUrl ? (
                         <a
-                          href={docItem.fileUrl}
+                          href={selectedDocument.fileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-primary underline"
                         >
-                          {docItem.documentTitle}
+                          {selectedDocument.documentTitle}
                         </a>
                       ) : (
-                        docItem.documentTitle
+                        selectedDocument.documentTitle
                       )}
                     </p>
-                    <div className="flex items-center gap-2 text-muted-foreground mt-0.5">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
                       <span className="inline-flex items-center gap-1 shrink-0">
                         <CalendarIcon className="h-3 w-3" />
                         {isQuarterlyReportsCard ? 'Submitted: ' : ''}
-                        {formatDateDisplay(docItem.date || docItem.createdAt)}
+                        {formatDateDisplay(selectedDocument.date || selectedDocument.createdAt)}
                       </span>
-                      {docItem.fileName && (
+                      {selectedDocument.fileName && (
                         <>
                           <span>•</span>
-                          <span className="inline-flex items-center gap-1 truncate">
+                          <span className="inline-flex min-w-0 max-w-full items-center gap-1">
                             <FileText className="h-3 w-3 shrink-0" />
-                            {docItem.fileName}
+                            <span className="truncate">{selectedDocument.fileName}</span>
                           </span>
                         </>
                       )}
@@ -489,7 +537,7 @@ export function RequiredDocumentCategoryCard({
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2 text-xs"
-                      onClick={() => onViewDocument(docItem)}
+                      onClick={() => onViewDocument(selectedDocument)}
                     >
                       <Eye className="h-3.5 w-3.5 mr-1" />
                       View
@@ -499,15 +547,15 @@ export function RequiredDocumentCategoryCard({
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(docItem)}
+                      onClick={() => handleDelete(selectedDocument)}
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1" />
                       Delete
                     </Button>
                   </div>
-                </li>
-              ))}
-            </ul>
+                </div>
+              )}
+            </>
           ) : (
             <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
               {isQuarterlyReportsCard
