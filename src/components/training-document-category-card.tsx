@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, ChangeEvent, FormEvent } from 'react';
+import { useEffect, useState, useRef, ChangeEvent, FormEvent } from 'react';
 import {
   Plus,
   Eye,
@@ -32,7 +32,28 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { formatCalendarDate } from '@/lib/format-calendar-date';
+
+function recordOptionLabel(record: TrainingDocRecord): string {
+  const title = record.documentTitle?.trim() || 'Untitled Record';
+  const miner = record.minerName?.trim();
+  return miner ? `${title} - ${miner}` : title;
+}
+
+/** Newest saved record first. `createdAt` is an upload timestamp; completion date is the fallback. */
+function recordNewestTime(record: TrainingDocRecord): number {
+  const created = Date.parse(record.createdAt || '');
+  if (!Number.isNaN(created)) return created;
+  const completed = Date.parse(record.completionDate || '');
+  return Number.isNaN(completed) ? 0 : completed;
+}
 
 export interface TrainingDocRecord {
   id: string;
@@ -87,6 +108,20 @@ export function TrainingDocumentCategoryCard({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormExpanded, setIsFormExpanded] = useState(true);
+  const [selectedRecordId, setSelectedRecordId] = useState('');
+
+  const sortedRecords = [...records].sort(
+    (a, b) => recordNewestTime(b) - recordNewestTime(a) || a.id.localeCompare(b.id),
+  );
+  const selectedRecord =
+    sortedRecords.find((record) => record.id === selectedRecordId) ?? null;
+  const selectPlaceholder = `Select a ${isTrainingPlan ? 'plan' : 'record'} (${records.length})`;
+
+  useEffect(() => {
+    if (selectedRecordId && !records.some((record) => record.id === selectedRecordId)) {
+      setSelectedRecordId('');
+    }
+  }, [records, selectedRecordId]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
@@ -212,6 +247,7 @@ export function TrainingDocumentCategoryCard({
       );
     }
 
+    setSelectedRecordId((current) => (current === record.id ? '' : current));
     toast({
       title: 'Deleted',
       description: `"${record.documentTitle}" has been removed from ${categoryName}.`,
@@ -221,7 +257,7 @@ export function TrainingDocumentCategoryCard({
   const formatDateDisplay = (rawDate: string | null) => formatCalendarDate(rawDate);
 
   return (
-    <Card className="flex flex-col justify-between border shadow-sm">
+    <Card className="flex min-w-0 w-full flex-col justify-between border shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5">
@@ -313,13 +349,13 @@ export function TrainingDocumentCategoryCard({
                     type="date"
                     value={completionDateInput}
                     onChange={(e) => setCompletionDateInput(e.target.value)}
-                    className="h-8 text-xs mt-1"
+                    className="h-8 min-w-0 text-xs mt-1"
                     required
                   />
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
+                <div className="grid min-w-0 grid-cols-2 gap-2">
+                  <div className="min-w-0">
                     <Label
                       htmlFor={`completion-${categoryName}`}
                       className="text-xs text-muted-foreground"
@@ -331,12 +367,12 @@ export function TrainingDocumentCategoryCard({
                       type="date"
                       value={completionDateInput}
                       onChange={(e) => setCompletionDateInput(e.target.value)}
-                      className="h-8 text-xs mt-1"
+                      className="h-8 min-w-0 text-xs mt-1"
                       required
                     />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <Label
                       htmlFor={`expiration-${categoryName}`}
                       className="text-xs text-muted-foreground"
@@ -348,7 +384,7 @@ export function TrainingDocumentCategoryCard({
                       type="date"
                       value={expirationDateInput}
                       onChange={(e) => setExpirationDateInput(e.target.value)}
-                      className="h-8 text-xs mt-1"
+                      className="h-8 min-w-0 text-xs mt-1"
                     />
                   </div>
                 </div>
@@ -390,7 +426,7 @@ export function TrainingDocumentCategoryCard({
         </div>
 
         {/* Category-specific Training Records List */}
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <div className="text-xs font-medium text-muted-foreground">
             Saved {isTrainingPlan ? 'Plans' : 'Records'} ({records.length})
           </div>
@@ -399,42 +435,63 @@ export function TrainingDocumentCategoryCard({
             <p className="text-xs text-muted-foreground py-3 text-center">
               Loading training records...
             </p>
-          ) : records.length > 0 ? (
-            <ul className="divide-y rounded-md border bg-background max-h-56 overflow-y-auto">
-              {records.map((rec) => (
-                <li
-                  key={rec.id}
-                  className="flex items-center justify-between gap-2 p-2.5 text-xs"
-                >
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="font-medium truncate" title={rec.documentTitle}>
-                      {rec.fileUrl ? (
+          ) : sortedRecords.length > 0 ? (
+            <>
+              <Select
+                key={selectedRecordId ? 'selected' : 'empty'}
+                value={selectedRecordId || undefined}
+                onValueChange={setSelectedRecordId}
+              >
+                <SelectTrigger className="h-8 w-full min-w-0 text-xs" aria-label={selectPlaceholder}>
+                  <SelectValue placeholder={selectPlaceholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortedRecords.map((record) => (
+                    <SelectItem key={record.id} value={record.id} className="text-xs">
+                      {recordOptionLabel(record)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {selectedRecord && (
+                <div className="flex min-w-0 flex-col gap-2 rounded-md border bg-background p-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 space-y-0.5 sm:flex-1">
+                    <p className="font-medium truncate" title={selectedRecord.documentTitle}>
+                      {selectedRecord.fileUrl ? (
                         <a
-                          href={rec.fileUrl}
+                          href={selectedRecord.fileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-primary underline"
                         >
-                          {rec.documentTitle}
+                          {selectedRecord.documentTitle}
                         </a>
                       ) : (
-                        rec.documentTitle
+                        selectedRecord.documentTitle
                       )}
                     </p>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
-                      {!isTrainingPlan && (
-                        <>
-                          <span className="inline-flex items-center gap-1 font-medium text-foreground/80">
-                            <User className="h-3 w-3 shrink-0" />
-                            {rec.minerName || 'Unassigned Miner'}
-                          </span>
-                          <span>•</span>
-                        </>
-                      )}
+                      <span className="inline-flex items-center gap-1 font-medium text-foreground/80">
+                        <User className="h-3 w-3 shrink-0" />
+                        {selectedRecord.minerName?.trim() || 'Unassigned Miner'}
+                      </span>
+                      <span>•</span>
                       <span className="inline-flex items-center gap-1 shrink-0">
                         <CalendarIcon className="h-3 w-3" />
-                        {formatDateDisplay(rec.completionDate || rec.createdAt)}
+                        {formatDateDisplay(
+                          selectedRecord.completionDate || selectedRecord.createdAt,
+                        )}
                       </span>
+                      {selectedRecord.expirationDate ? (
+                        <>
+                          <span>•</span>
+                          <span className="inline-flex items-center gap-1 shrink-0">
+                            <CalendarIcon className="h-3 w-3" />
+                            Expires {formatDateDisplay(selectedRecord.expirationDate)}
+                          </span>
+                        </>
+                      ) : null}
                     </div>
                   </div>
 
@@ -444,7 +501,7 @@ export function TrainingDocumentCategoryCard({
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2 text-xs"
-                      onClick={() => onViewRecord(rec)}
+                      onClick={() => onViewRecord(selectedRecord)}
                     >
                       <Eye className="h-3.5 w-3.5 mr-1" />
                       View
@@ -454,15 +511,15 @@ export function TrainingDocumentCategoryCard({
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(rec)}
+                      onClick={() => handleDelete(selectedRecord)}
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1" />
                       Delete
                     </Button>
                   </div>
-                </li>
-              ))}
-            </ul>
+                </div>
+              )}
+            </>
           ) : (
             <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
               No {isTrainingPlan ? 'training plans' : 'records'} uploaded for this category.
