@@ -114,7 +114,7 @@ export function Login({
     <div className={`w-full min-h-screen lg:grid lg:min-h-screen lg:grid-cols-2 ${bodyFontClassName}`}>
       <div className="flex min-h-screen items-center justify-center bg-[#F8F9FA] px-4 py-8 text-[#343A40] sm:px-6 lg:py-12">
         <div className="mx-auto grid w-full max-w-[400px] gap-6">
-          <div className="grid justify-items-center gap-3 text-center">
+          <div className="grid justify-items-center gap-2 text-center">
             <Image
               src="/minematey-logo.png"
               alt="MineMatey logo"
@@ -123,9 +123,6 @@ export function Login({
               priority
               className="h-auto w-36 sm:w-44"
             />
-            <h1 className={`text-3xl font-bold tracking-tight text-[#343A40] ${headingFontClassName}`}>
-              MineMatey
-            </h1>
             <p className="text-balance text-sm text-[#6C757D]">
               Simplify &amp; Digitalize MSHA Safety Compliance
             </p>
