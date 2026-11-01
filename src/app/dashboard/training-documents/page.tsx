@@ -37,7 +37,7 @@ interface TrainingCategoryConfig {
   isPlanCard?: boolean;
 }
 
-export const TRAINING_DOCUMENT_CATEGORIES: TrainingCategoryConfig[] = [
+const TRAINING_DOCUMENT_CATEGORIES: TrainingCategoryConfig[] = [
   {
     name: 'Approved Training Plan (Part 46 / Part 48)',
     description: 'MSHA-approved Part 46 or Part 48 training plan and revisions.',
@@ -104,7 +104,7 @@ export default function TrainingDocumentsPage() {
             companyId: data.companyId || 'comp_test_001',
             mshaMineId: data.mshaMineId || selectedMineId,
             category: data.category || '',
-            documentTitle: data.documentTitle || 'Untitled Record',
+            documentTitle: data.documentTitle || data.documentName || 'Untitled Record',
             minerName: data.minerName || '',
             completionDate: data.completionDate || data.createdAt || '',
             expirationDate: data.expirationDate || null,
@@ -145,7 +145,7 @@ export default function TrainingDocumentsPage() {
     viewingRecord?.category.toLowerCase().includes('approved training plan') ?? false;
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Training Documents</h1>
@@ -158,7 +158,7 @@ export default function TrainingDocumentsPage() {
       </div>
 
       {/* 2 & 3. Visual Grid of Dedicated Training Category Cards */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {TRAINING_DOCUMENT_CATEGORIES.map((categoryConfig) => {
           const categoryRecords = allMineRecords.filter(
             (rec) =>
