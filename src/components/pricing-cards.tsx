@@ -1,13 +1,13 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Check, Loader2, Sparkles } from 'lucide-react';
 import { PLANS, Plan } from '@/lib/plans-config';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { useUser, useFirestore, useDoc } from '@/firebase';
-import { collection, addDoc, onSnapshot, doc, DocumentReference } from 'firebase/firestore';
+import { useUser, useFirestore } from '@/firebase';
+import { collection, addDoc, onSnapshot } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -23,11 +23,11 @@ export function PricingCards() {
       return;
     }
 
-    if (plan.key === 'starter') return; // Already on free
+    if (plan.key === 'starter') return;
 
     if (plan.key === 'enterprise') {
-        window.location.href = 'mailto:sales@minematey.com?subject=Enterprise Plan Inquiry';
-        return;
+      window.location.href = 'mailto:sales@minematey.com?subject=Enterprise Plan Inquiry';
+      return;
     }
 
     setLoadingPlan(plan.key);
@@ -35,16 +35,13 @@ export function PricingCards() {
     try {
       const checkoutSessionsRef = collection(firestore, 'users', user.uid, 'checkout_sessions');
       
-      // 1. Create a checkout session document in Firestore
-      // The "Run Payments with Stripe" extension will see this and update it with a Stripe URL
       const docRef = await addDoc(checkoutSessionsRef, {
         price: plan.priceId,
         success_url: window.location.origin + '/dashboard?session_id={CHECKOUT_SESSION_ID}',
         cancel_url: window.location.origin + '/dashboard/upgrade',
-        mode: 'subscription', // or 'payment' for one-time
+        mode: 'subscription',
       });
 
-      // 2. Wait for the extension to write the URL back to the document
       const unsubscribe = onSnapshot(docRef, (snap) => {
         const data = snap.data();
         if (data?.url) {
@@ -66,7 +63,7 @@ export function PricingCards() {
   };
 
   return (
-    <div className="grid gap-6 md:grid-cols-3">
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       {PLANS.map((plan) => (
         <Card key={plan.key} className={cn("flex flex-col relative overflow-hidden", plan.isPopular && "border-primary shadow-lg scale-105 z-10")}>
           {plan.isPopular && (
