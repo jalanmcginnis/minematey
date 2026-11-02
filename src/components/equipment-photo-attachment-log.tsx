@@ -8,8 +8,9 @@ import {
   Loader2,
   Mail,
   Trash2,
-  ExternalLink,
+  Eye,
   X,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
 import {
   collection,
@@ -41,13 +42,12 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 export interface EquipmentAttachmentRecord {
   id: string;
   companyId: string;
@@ -92,6 +92,7 @@ export function EquipmentPhotoAttachmentLog({
   // Recent Equipment Photos & Documents State
   const [attachments, setAttachments] = useState<EquipmentAttachmentRecord[]>([]);
   const [isLoadingAttachments, setIsLoadingAttachments] = useState(true);
+  const [selectedDocumentId, setSelectedDocumentId] = useState('');
 
   // Subscribe in real-time to "equipment_attachments" filtered by selectedMineId
   useEffect(() => {
@@ -143,6 +144,15 @@ export function EquipmentPhotoAttachmentLog({
 
     return () => unsubscribe();
   }, [firestore, selectedMineId]);
+
+  useEffect(() => {
+    if (
+      selectedDocumentId &&
+      !attachments.some((record) => record.id === selectedDocumentId)
+    ) {
+      setSelectedDocumentId('');
+    }
+  }, [attachments, selectedDocumentId]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
@@ -288,6 +298,7 @@ export function EquipmentPhotoAttachmentLog({
     try {
       const docRef = doc(firestore, 'equipment_attachments', record.id);
       await deleteDoc(docRef);
+      setSelectedDocumentId((current) => (current === record.id ? '' : current));
     } catch (error: any) {
       console.error('Error deleting equipment attachment record:', error);
       toast({
@@ -313,18 +324,23 @@ export function EquipmentPhotoAttachmentLog({
     });
   };
 
-  const isImageRecord = (record: EquipmentAttachmentRecord) => {
-    if (record.fileType && record.fileType.startsWith('image/')) return true;
-    if (record.fileName && /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(record.fileName)) {
-      return true;
-    }
-    return false;
-  };
-
   const formatDateTime = (isoString: string) => {
     if (!isoString) return '—';
     const parsed = new Date(isoString);
     return isNaN(parsed.getTime()) ? isoString : parsed.toLocaleString();
+  };
+
+  const selectedDocument =
+    attachments.find((record) => record.id === selectedDocumentId) ?? null;
+  const selectPlaceholder = `Select a document (${attachments.length})`;
+  const selectedTitle =
+    selectedDocument?.equipmentId?.trim() ||
+    selectedDocument?.fileName ||
+    'Equipment Document';
+
+  const handleViewAttachment = (record: EquipmentAttachmentRecord) => {
+    if (!record.fileUrl) return;
+    window.open(record.fileUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -453,94 +469,106 @@ export function EquipmentPhotoAttachmentLog({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Preview</TableHead>
-                <TableHead>Equipment Unit #</TableHead>
-                <TableHead className="hidden md:table-cell">Description</TableHead>
-                <TableHead>Examiner Name</TableHead>
-                <TableHead className="hidden md:table-cell">Date / Time</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoadingAttachments && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center">
-                    Loading equipment photos & documents...
-                  </TableCell>
-                </TableRow>
-              )}
-              {!isLoadingAttachments && attachments.length > 0 ? (
-                attachments.map((record) => (
-                  <TableRow key={record.id}>
-                    <TableCell>
-                      <a
-                        href={record.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-xs font-medium text-primary hover:underline"
-                        title="Click to open attachment in new tab"
-                      >
-                        {isImageRecord(record) ? (
-                          <img
-                            src={record.fileUrl}
-                            alt={record.equipmentId}
-                            className="h-12 w-12 rounded object-cover border shrink-0"
-                          />
-                        ) : (
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded border bg-primary/10 text-primary">
-                            <FileText className="h-6 w-6" />
-                          </div>
-                        )}
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                      </a>
-                    </TableCell>
-                    <TableCell className="font-medium">{record.equipmentId}</TableCell>
-                    <TableCell className="hidden md:table-cell max-w-xs truncate">
-                      {record.description || '—'}
-                    </TableCell>
-                    <TableCell>{record.examinerName}</TableCell>
-                    <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                      {formatDateTime(record.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEmailPhoto(record)}
+          {isLoadingAttachments ? (
+            <p className="py-6 text-center text-sm">
+              Loading equipment photos & documents...
+            </p>
+          ) : attachments.length > 0 ? (
+            <div className="min-w-0 space-y-2">
+              <Select
+                key={selectedDocumentId ? 'selected' : 'empty'}
+                value={selectedDocumentId || undefined}
+                onValueChange={setSelectedDocumentId}
+              >
+                <SelectTrigger
+                  className="h-8 w-full min-w-0 text-xs"
+                  aria-label={selectPlaceholder}
+                >
+                  <SelectValue placeholder={selectPlaceholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {attachments.map((record) => (
+                    <SelectItem key={record.id} value={record.id} className="text-xs">
+                      {record.equipmentId?.trim() || record.fileName || 'Equipment Document'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {selectedDocument && (
+                <div className="flex min-w-0 flex-col gap-2 rounded-md border bg-background p-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 space-y-0.5 sm:flex-1">
+                    <p className="font-medium truncate" title={selectedTitle}>
+                      {selectedDocument.fileUrl ? (
+                        <a
+                          href={selectedDocument.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline"
                         >
-                          <Mail className="mr-1.5 h-3.5 w-3.5" />
-                          Email Photo
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteAttachment(record)}
-                        >
-                          <Trash2 className="mr-1 h-4 w-4" />
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                !isLoadingAttachments && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center">
-                      No standalone equipment photos or documents logged for this mine site yet.
-                    </TableCell>
-                  </TableRow>
-                )
+                          {selectedTitle}
+                        </a>
+                      ) : (
+                        selectedTitle
+                      )}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
+                      <span className="inline-flex items-center gap-1 shrink-0">
+                        <CalendarIcon className="h-3 w-3" />
+                        {formatDateTime(selectedDocument.createdAt)}
+                      </span>
+                      {selectedDocument.fileName && (
+                        <>
+                          <span>•</span>
+                          <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+                            <FileText className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{selectedDocument.fileName}</span>
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1 shrink-0">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => handleViewAttachment(selectedDocument)}
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1" />
+                      View
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => handleEmailPhoto(selectedDocument)}
+                    >
+                      <Mail className="mr-1 h-3.5 w-3.5" />
+                      Email Photo
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteAttachment(selectedDocument)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
               )}
-            </TableBody>
-          </Table>
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm">
+              No standalone equipment photos or documents logged for this mine site yet.
+            </p>
+          )}
         </CardContent>
         <CardFooter>
           <div className="text-xs text-muted-foreground">

@@ -21,14 +21,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -42,24 +34,23 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Mail,
-  MoreHorizontal,
   Trash2,
   Eye,
-  ExternalLink,
   FileText,
   AlertTriangle,
   CheckCircle2,
   Wrench,
   Loader2,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { WorkplaceExamDetailsDialog } from './workplace-exam-details-dialog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -90,6 +81,7 @@ export function WorkplaceExamsList({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedExam, setSelectedExam] = useState<any | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedDocumentId, setSelectedDocumentId] = useState('');
 
   // Corrective Action Modal State
   const [correctiveExam, setCorrectiveExam] = useState<any | null>(null);
@@ -154,6 +146,12 @@ export function WorkplaceExamsList({
     return () => unsubscribe();
   }, [firestore, selectedMineId]);
 
+  useEffect(() => {
+    if (selectedDocumentId && !exams.some((exam) => exam.id === selectedDocumentId)) {
+      setSelectedDocumentId('');
+    }
+  }, [exams, selectedDocumentId]);
+
   const isExamCorrected = (exam: any) => {
     const rawStatus = String(exam.status || '').toLowerCase();
     return (
@@ -195,14 +193,6 @@ export function WorkplaceExamsList({
       return new Date(exam.createdAt).toLocaleDateString();
     }
     return '—';
-  };
-
-  const isImageAttachment = (exam: any) => {
-    if (!exam.fileUrl) return false;
-    if (exam.fileType && exam.fileType.startsWith('image/')) return true;
-    if (exam.fileName && /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(exam.fileName))
-      return true;
-    return false;
   };
 
   const openLogCorrectiveModal = (exam: any) => {
@@ -315,6 +305,7 @@ ${profile?.fullName || user?.displayName || 'MineMatey User'}`;
     const examDocRef = doc(activeDb, 'workplace_exams', examId);
     try {
       await deleteDoc(examDocRef);
+      setSelectedDocumentId((current) => (current === examId ? '' : current));
       toast({
         title: 'Deleted',
         description: 'The workplace exam has been deleted.',
@@ -334,6 +325,16 @@ ${profile?.fullName || user?.displayName || 'MineMatey User'}`;
     setIsDialogOpen(true);
   };
 
+  const selectedDocument =
+    exams.find((exam) => exam.id === selectedDocumentId) ?? null;
+  const selectPlaceholder = `Select a document (${exams.length})`;
+  const selectedTitle = selectedDocument?.area?.trim() || 'Workplace Exam';
+  const selectedDefect = selectedDocument ? isExamDefect(selectedDocument) : false;
+  const selectedCorrected = selectedDocument ? isExamCorrected(selectedDocument) : false;
+  const selectedSafety = String(
+    selectedDocument?.safetyStatus || selectedDocument?.status || 'safe'
+  );
+
   return (
     <>
       <Card>
@@ -344,188 +345,145 @@ ${profile?.fullName || user?.displayName || 'MineMatey User'}`;
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Area</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden md:table-cell">Inspector</TableHead>
-                <TableHead className="hidden md:table-cell">Date</TableHead>
-                <TableHead>Attachment</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center">
-                    Loading exams...
-                  </TableCell>
-                </TableRow>
-              )}
-              {!isLoading && exams && exams.length > 0 ? (
-                exams.map((exam) => {
-                  const defect = isExamDefect(exam);
-                  const corrected = isExamCorrected(exam);
-                  const rawSafety = String(
-                    exam.safetyStatus || exam.status || 'safe'
-                  );
+          {isLoading ? (
+            <p className="py-6 text-center text-sm">Loading exams...</p>
+          ) : exams.length > 0 ? (
+            <div className="min-w-0 space-y-2">
+              <Select
+                key={selectedDocumentId ? 'selected' : 'empty'}
+                value={selectedDocumentId || undefined}
+                onValueChange={setSelectedDocumentId}
+              >
+                <SelectTrigger
+                  className="h-8 w-full min-w-0 text-xs"
+                  aria-label={selectPlaceholder}
+                >
+                  <SelectValue placeholder={selectPlaceholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {exams.map((exam) => (
+                    <SelectItem key={exam.id} value={exam.id} className="text-xs">
+                      {exam.area?.trim() || 'Workplace Exam'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-                  return (
-                    <TableRow key={exam.id}>
-                      <TableCell className="font-medium">{exam.area}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {!defect ? (
-                            <Badge variant="secondary">Safe</Badge>
-                          ) : (
-                            <>
-                              <Badge variant="destructive" className="capitalize">
-                                {rawSafety === 'Open' || rawSafety === 'Corrected'
-                                  ? 'Defects Found'
-                                  : rawSafety.replace('_', ' ')}
+              {selectedDocument && (
+                <div className="flex min-w-0 flex-col gap-2 rounded-md border bg-background p-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 space-y-1 sm:flex-1">
+                    <p className="font-medium truncate" title={selectedTitle}>
+                      {selectedDocument.fileUrl ? (
+                        <a
+                          href={selectedDocument.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline"
+                        >
+                          {selectedTitle}
+                        </a>
+                      ) : (
+                        selectedTitle
+                      )}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
+                      <span className="inline-flex items-center gap-1 shrink-0">
+                        <CalendarIcon className="h-3 w-3" />
+                        {getExamDateString(selectedDocument)}
+                      </span>
+                      {selectedDocument.fileName && (
+                        <>
+                          <span>•</span>
+                          <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+                            <FileText className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{selectedDocument.fileName}</span>
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {!selectedDefect ? (
+                        <Badge variant="secondary">Safe</Badge>
+                      ) : (
+                        <>
+                          <Badge variant="destructive" className="capitalize">
+                            {selectedSafety === 'Open' || selectedSafety === 'Corrected'
+                              ? 'Defects Found'
+                              : selectedSafety.replace('_', ' ')}
+                          </Badge>
+                          {selectedCorrected ? (
+                            <button
+                              type="button"
+                              onClick={() => handleViewExam(selectedDocument)}
+                              title="Click to view full defect resolution chain"
+                              className="inline-flex items-center focus:outline-none"
+                            >
+                              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30 cursor-pointer">
+                                <CheckCircle2 className="mr-1 h-3 w-3" />
+                                Corrected
                               </Badge>
-
-                              {corrected ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleViewExam(exam)}
-                                  title="Click to view full defect resolution chain"
-                                  className="inline-flex items-center focus:outline-none"
-                                >
-                                  <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30 cursor-pointer">
-                                    <CheckCircle2 className="mr-1 h-3 w-3" />
-                                    Corrected
-                                  </Badge>
-                                </button>
-                              ) : (
-                                <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/40">
-                                  <AlertTriangle className="mr-1 h-3 w-3" />
-                                  Open Defect
-                                </Badge>
-                              )}
-                            </>
+                            </button>
+                          ) : (
+                            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/40">
+                              <AlertTriangle className="mr-1 h-3 w-3" />
+                              Open Defect
+                            </Badge>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {exam.inspector || exam.inspectorName || '—'}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {getExamDateString(exam)}
-                      </TableCell>
-                      <TableCell>
-                        {exam.fileUrl ? (
-                          <a
-                            href={exam.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-xs font-medium text-primary hover:underline"
-                          >
-                            {isImageAttachment(exam) ? (
-                              <img
-                                src={exam.fileUrl}
-                                alt={exam.fileName || 'Attachment thumbnail'}
-                                className="h-9 w-9 rounded object-cover border shrink-0"
-                              />
-                            ) : (
-                              <FileText className="h-4 w-4 shrink-0" />
-                            )}
-                            <span className="inline-flex items-center gap-1">
-                              View Attachment
-                              <ExternalLink className="h-3 w-3" />
-                            </span>
-                          </a>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {defect && !corrected && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
-                              onClick={() => openLogCorrectiveModal(exam)}
-                            >
-                              <Wrench className="mr-1.5 h-3.5 w-3.5" />
-                              Log Corrective Action
-                            </Button>
-                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
 
-                          {defect && corrected && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="text-emerald-400 hover:text-emerald-300 text-xs"
-                              onClick={() => handleViewExam(exam)}
-                            >
-                              <Eye className="mr-1 h-3.5 w-3.5" />
-                              View Chain
-                            </Button>
-                          )}
-
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                aria-haspopup="true"
-                                size="icon"
-                                variant="ghost"
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Toggle menu</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuItem
-                                onClick={() => handleViewExam(exam)}
-                              >
-                                <Eye className="mr-2 h-4 w-4" />
-                                View Details & Chain
-                              </DropdownMenuItem>
-                              {defect && !corrected && (
-                                <DropdownMenuItem
-                                  onClick={() => openLogCorrectiveModal(exam)}
-                                >
-                                  <Wrench className="mr-2 h-4 w-4" />
-                                  Log Corrective Action
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem
-                                onClick={() => handleEmailReport(exam)}
-                              >
-                                <Mail className="mr-2 h-4 w-4" />
-                                Email
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => handleDeleteExam(exam.id)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              ) : (
-                !isLoading && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center">
-                      No workplace exams found.
-                    </TableCell>
-                  </TableRow>
-                )
+                  <div className="flex flex-wrap items-center gap-1 shrink-0">
+                    {selectedDefect && !selectedCorrected && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
+                        onClick={() => openLogCorrectiveModal(selectedDocument)}
+                      >
+                        <Wrench className="mr-1 h-3.5 w-3.5" />
+                        Log Corrective Action
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => handleViewExam(selectedDocument)}
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1" />
+                      View
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => handleEmailReport(selectedDocument)}
+                    >
+                      <Mail className="h-3.5 w-3.5 mr-1" />
+                      Email
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteExam(selectedDocument.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
               )}
-            </TableBody>
-          </Table>
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm">No workplace exams found.</p>
+          )}
         </CardContent>
         <CardFooter>
           <div className="text-xs text-muted-foreground">
