@@ -147,7 +147,7 @@ export default function DashboardLayout({
         </div>
       </div>
       <div className="flex min-w-0 flex-col">
-        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6">
+        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 max-sm:min-w-0 max-sm:gap-1.5 max-sm:px-2 lg:h-[60px] lg:px-6">
           <Sheet>
             <SheetTrigger asChild>
               <Button
@@ -190,8 +190,8 @@ export default function DashboardLayout({
           </Sheet>
 
           {/* Global Header Active Mine Site Selector */}
-          <div className="flex flex-1 items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-1 items-center justify-between gap-2 max-sm:min-w-0 max-sm:gap-1.5">
+            <div className="flex items-center gap-2 max-sm:min-w-0 max-sm:flex-1">
               <Mountain className="h-4 w-4 text-primary shrink-0 hidden sm:inline-block" />
               <label
                 htmlFor="global-header-mine-select"
@@ -204,7 +204,7 @@ export default function DashboardLayout({
                 value={selectedMineId}
                 onChange={(e) => setSelectedMineId(e.target.value)}
                 aria-label="Global Active MSHA Mine Site"
-                className="flex h-8 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="flex h-8 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 max-sm:w-full max-sm:min-w-0 max-sm:max-w-full max-sm:truncate"
               >
                 {mineOptions.map((mine) => (
                   <option key={mine.id} value={mine.id}>
@@ -215,17 +215,17 @@ export default function DashboardLayout({
             </div>
 
             {/* Admin Link, Logged-in User Display & Sign Out Button */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 max-sm:shrink-0 max-sm:gap-1">
               {canAccessAdmin && (
                 <Button
                   asChild
                   variant="secondary"
                   size="sm"
-                  className="h-8 px-2.5 text-xs font-semibold"
+                  className="h-8 px-2.5 text-xs font-semibold max-sm:w-8 max-sm:shrink-0 max-sm:px-0"
                 >
-                  <Link href="/admin">
-                    <Settings className="mr-1.5 h-3.5 w-3.5 text-primary" />
-                    Admin Settings
+                  <Link href="/admin" aria-label="Admin Settings">
+                    <Settings className="mr-1.5 h-3.5 w-3.5 text-primary max-sm:mr-0" />
+                    <span className="max-sm:hidden">Admin Settings</span>
                   </Link>
                 </Button>
               )}
@@ -242,17 +242,18 @@ export default function DashboardLayout({
                 variant="outline"
                 size="sm"
                 onClick={handleLogout}
-                className="h-8 px-2.5 text-xs"
+                aria-label="Sign Out"
+                className="h-8 px-2.5 text-xs max-sm:w-8 max-sm:shrink-0 max-sm:px-0"
               >
-                <LogOut className="mr-1.5 h-3.5 w-3.5" />
-                Sign Out
+                <LogOut className="mr-1.5 h-3.5 w-3.5 max-sm:mr-0" />
+                <span className="max-sm:hidden">Sign Out</span>
               </Button>
             </div>
           </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="secondary" size="icon" className="rounded-full">
+              <Button variant="secondary" size="icon" className="rounded-full max-sm:shrink-0">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={user.photoURL || ''} alt={displayIdentity} />
                   <AvatarFallback>{getInitials(profile?.fullName || displayIdentity)}</AvatarFallback>
