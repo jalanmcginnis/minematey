@@ -42,6 +42,7 @@ import {
   Wrench,
   Loader2,
   Calendar as CalendarIcon,
+  Download,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -194,6 +195,73 @@ export function WorkplaceExamsList({
       return new Date(exam.createdAt).toLocaleDateString();
     }
     return '—';
+  };
+
+
+  const exportToCSV = () => {
+    if (!exams.length) {
+      toast({
+        title: 'No Data',
+        description: 'There are no workplace exams to export.',
+      });
+      return;
+    }
+
+    const headers = [
+      'Exam ID',
+      'Mine ID',
+      'Area',
+      'Inspector',
+      'Exam Date',
+      'Status',
+      'Safety Status',
+      'Findings',
+      'Corrective Action',
+      'Corrected By',
+      'Corrected At',
+      'Created At',
+    ];
+
+    const rows = exams.map((exam) => {
+      const dateStr = getExamDateString(exam);
+      const correctedAt = exam.correctedAt
+        ? new Date(exam.correctedAt).toLocaleString()
+        : '';
+      const createdAt = exam.createdAt
+        ? new Date(exam.createdAt).toLocaleString()
+        : '';
+
+      return [
+        exam.id || '',
+        exam.mshaMineId || selectedMineId || '',
+        exam.area || '',
+        exam.inspector || exam.inspectorName || '',
+        dateStr,
+        exam.status || '',
+        exam.safetyStatus || '',
+        (exam.findings || '').replace(/\n/g, ' '),
+        (exam.correctiveActionNotes || exam.correctiveAction || '').replace(/\n/g, ' '),
+        exam.correctedByName || '',
+        correctedAt,
+        createdAt,
+      ]
+        .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+        .join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `workplace-exams-${selectedMineId}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'CSV Exported',
+      description: `${exams.length} workplace exam(s) downloaded.`,
+    });
   };
 
   const openLogCorrectiveModal = (exam: any) => {
@@ -490,11 +558,21 @@ ${profile?.fullName || user?.displayName || 'MineMatey User'}`;
             <p className="py-6 text-center text-sm">No workplace exams found.</p>
           )}
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="text-xs text-muted-foreground">
             Showing <strong>1-{exams?.length || 0}</strong> of{' '}
             <strong>{exams?.length || 0}</strong> exams
           </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!exams.length || isLoading}
+            onClick={exportToCSV}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
         </CardFooter>
       </Card>
 
