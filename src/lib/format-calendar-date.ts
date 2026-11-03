@@ -23,3 +23,10 @@ export function formatCalendarDate(rawDate: string | null | undefined): string {
   const parsed = new Date(trimmed);
   return Number.isNaN(parsed.getTime()) ? trimmed : parsed.toLocaleDateString();
 }
+
+/** Submitted/created timestamp for record labels. Empty when the value is missing. */
+export function formatSubmittedDate(rawDate: unknown): string {
+  if (typeof rawDate !== 'string' || !rawDate.trim()) return '';
+  const formatted = formatCalendarDate(rawDate);
+  return formatted === '—' ? '' : formatted;
+}

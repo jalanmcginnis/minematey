@@ -48,6 +48,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { formatSubmittedDate } from '@/lib/format-calendar-date';
+
 export interface ExamAttachmentRecord {
   id: string;
   companyId: string;
@@ -343,12 +345,6 @@ export function SitePhotoAttachmentLog({
     });
   };
 
-  const formatDateTime = (isoString: string) => {
-    if (!isoString) return '—';
-    const parsed = new Date(isoString);
-    return isNaN(parsed.getTime()) ? isoString : parsed.toLocaleString();
-  };
-
   const selectedDocument =
     attachments.find((record) => record.id === selectedDocumentId) ?? null;
   const selectPlaceholder = `Select a document (${attachments.length})`;
@@ -501,11 +497,15 @@ export function SitePhotoAttachmentLog({
                   <SelectValue placeholder={selectPlaceholder} />
                 </SelectTrigger>
                 <SelectContent>
-                  {attachments.map((record) => (
-                    <SelectItem key={record.id} value={record.id} className="text-xs">
-                      {record.area?.trim() || record.fileName || 'Site Document'}
-                    </SelectItem>
-                  ))}
+                  {attachments.map((record) => {
+                    const title = record.area?.trim() || record.fileName || 'Site Document';
+                    const submitted = formatSubmittedDate(record.createdAt);
+                    return (
+                      <SelectItem key={record.id} value={record.id} className="text-xs">
+                        {submitted ? `${title} - ${submitted}` : title}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
 
@@ -529,7 +529,7 @@ export function SitePhotoAttachmentLog({
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
                       <span className="inline-flex items-center gap-1 shrink-0">
                         <CalendarIcon className="h-3 w-3" />
-                        {formatDateTime(selectedDocument.createdAt)}
+                        Submitted: {formatSubmittedDate(selectedDocument.createdAt) || '—'}
                       </span>
                       {selectedDocument.fileName && (
                         <>

@@ -53,6 +53,7 @@ import {
 } from '@/components/ui/select';
 import { EquipmentExamDetailsDialog } from './equipment-exam-details-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { formatSubmittedDate } from '@/lib/format-calendar-date';
 
 const ACTION_TYPE_OPTIONS = [
   'Hazard Abated / Repaired',
@@ -380,14 +381,19 @@ ${profile?.fullName || user?.displayName || 'MineMatey User'}`;
                   <SelectValue placeholder={selectPlaceholder} />
                 </SelectTrigger>
                 <SelectContent>
-                  {exams.map((exam) => (
-                    <SelectItem key={exam.id} value={exam.id} className="text-xs">
-                      {exam.equipmentUnit ||
-                        exam.equipmentNumber ||
-                        exam.equipmentId ||
-                        'Equipment Exam'}
-                    </SelectItem>
-                  ))}
+                  {exams.map((exam) => {
+                    const title =
+                      exam.equipmentUnit ||
+                      exam.equipmentNumber ||
+                      exam.equipmentId ||
+                      'Equipment Exam';
+                    const submitted = formatSubmittedDate(exam.createdAt);
+                    return (
+                      <SelectItem key={exam.id} value={exam.id} className="text-xs">
+                        {submitted ? `${title} - ${submitted}` : title}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
 
@@ -411,7 +417,7 @@ ${profile?.fullName || user?.displayName || 'MineMatey User'}`;
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
                       <span className="inline-flex items-center gap-1 shrink-0">
                         <CalendarIcon className="h-3 w-3" />
-                        {getExamDateString(selectedDocument)}
+                        Submitted: {formatSubmittedDate(selectedDocument.createdAt) || '—'}
                       </span>
                       {selectedDocument.fileName && (
                         <>
