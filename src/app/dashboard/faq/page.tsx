@@ -9,6 +9,28 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const sections = [
+
+  {
+    title: 'Install on your phone',
+    items: [
+      {
+        q: 'Can I install MineMatey like an app?',
+        a: 'Yes. MineMatey is a web app, not a separate App Store or Play Store download. You can add it to your phone home screen so it opens like an app.',
+      },
+      {
+        q: 'How do I install it on an iPhone?',
+        a: 'Open MineMatey in Safari. Tap the Share button, then tap Add to Home Screen. Name it MineMatey and tap Add. Use that home screen icon next time instead of the browser tab.',
+      },
+      {
+        q: 'How do I install it on an Android phone?',
+        a: 'Open MineMatey in Chrome. Tap the menu (three dots), then tap Install app or Add to Home screen. Confirm the install. If you do not see Install app, use Add to Home screen.',
+      },
+      {
+        q: 'Will it work offline?',
+        a: 'The home screen icon opens MineMatey like an app, but you still need a connection to sign in and load or save exams, photos, and documents.',
+      },
+    ],
+  },
   {
     title: 'Getting started',
     items: [
