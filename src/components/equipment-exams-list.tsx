@@ -55,6 +55,7 @@ import {
 import { EquipmentExamDetailsDialog } from './equipment-exam-details-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { formatSubmittedDate } from '@/lib/format-calendar-date';
+import { isExamPastRetention } from '@/lib/retention';
 
 const ACTION_TYPE_OPTIONS = [
   'Hazard Abated / Repaired',
@@ -137,7 +138,14 @@ export function EquipmentExamsList({
           return timeB - timeA;
         });
 
-        setExams(fetchedDocs);
+        const expired = fetchedDocs.filter((exam: any) => isExamPastRetention(exam));
+        const kept = fetchedDocs.filter((exam: any) => !isExamPastRetention(exam));
+        expired.forEach((exam: any) => {
+          deleteDoc(doc(activeDb, 'equipment_exams', exam.id)).catch((err) => {
+            console.error('Failed to delete expired equipment exam:', exam.id, err);
+          });
+        });
+        setExams(kept);
         setIsLoading(false);
       },
       (error) => {
@@ -434,7 +442,7 @@ ${profile?.fullName || user?.displayName || 'MineMatey User'}`;
         <CardHeader>
           <CardTitle>Recent Equipment Exams</CardTitle>
           <CardDescription>
-            A log of recently submitted equipment safety examinations and defect resolution status.
+            A log of recently submitted equipment safety examinations and defect resolution status. Records and related photos older than 24 months are removed automatically.
           </CardDescription>
         </CardHeader>
         <CardContent>
