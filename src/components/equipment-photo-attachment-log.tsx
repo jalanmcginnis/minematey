@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { formatSubmittedDate } from '@/lib/format-calendar-date';
+import { isPastRetention } from '@/lib/retention';
 
 export interface EquipmentAttachmentRecord {
   id: string;
@@ -136,7 +137,19 @@ export function EquipmentPhotoAttachmentLog({
           return timeB - timeA;
         });
 
-        setAttachments(records);
+        const expired = records.filter((record) => isPastRetention(record.createdAt));
+        const kept = records.filter((record) => !isPastRetention(record.createdAt));
+        expired.forEach((record) => {
+          deleteDoc(doc(firestore, 'equipment_attachments', record.id)).catch((err) => {
+            console.error('Failed to delete expired equipment photo record:', record.id, err);
+          });
+          if (record.storagePath && storage) {
+            deleteStorageObject(storage, record.storagePath).catch((err) => {
+              console.error('Failed to delete expired equipment photo file:', record.storagePath, err);
+            });
+          }
+        });
+        setAttachments(kept);
         setIsLoadingAttachments(false);
       },
       (error) => {
@@ -352,7 +365,7 @@ export function EquipmentPhotoAttachmentLog({
           </div>
           <CardDescription>
             Independently upload equipment defect photos or maintenance PDFs for mine site{' '}
-            <strong>{selectedMineId}</strong>.
+            <strong>{selectedMineId}</strong>. Photos and PDFs older than 24 months are removed automatically.
           </CardDescription>
         </CardHeader>
         <CardContent>
