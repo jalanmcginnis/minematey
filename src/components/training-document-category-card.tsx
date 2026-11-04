@@ -93,7 +93,7 @@ export function TrainingDocumentCategoryCard({
 }: TrainingDocumentCategoryCardProps) {
   const firestore = useFirestore();
   const storage = useStorage();
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, companyPlan, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const isTrainingPlan =
@@ -404,7 +404,7 @@ export function TrainingDocumentCategoryCard({
               </div>
 
               <Button
-                type="submit"
+                type="submit" disabled={companyPlan.examsOnly}
                 size="sm"
                 className="w-full h-8 text-xs"
                 disabled={isSubmitting}
