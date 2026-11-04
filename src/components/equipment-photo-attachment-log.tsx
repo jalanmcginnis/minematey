@@ -74,7 +74,7 @@ export function EquipmentPhotoAttachmentLog({
 }: EquipmentPhotoAttachmentLogProps) {
   const firestore = useFirestore();
   const storage = useStorage();
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, companyPlan, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const resolvedExaminerName = profile?.fullName || user?.email || 'Examiner';
