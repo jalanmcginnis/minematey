@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { AIRecommendationForm } from "@/components/ai-recommendation-form";
+import { OpenDefectReminder } from "@/components/open-defect-reminder";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -142,6 +143,8 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      <OpenDefectReminder />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {quickLinks.map((link) => (
