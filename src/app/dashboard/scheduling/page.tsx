@@ -26,6 +26,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
+import { useAuth } from '@/context/AuthContext';
 import { useActiveMine } from '@/context/MineContext';
 import { ActiveMineBadge } from '@/components/active-mine-badge';
 import { useToast } from '@/hooks/use-toast';
@@ -90,6 +91,7 @@ const SCHEDULE_CATEGORIES = [
 
 export default function SchedulingPage() {
   const firestore = useFirestore();
+  const { profile } = useAuth();
   const { toast } = useToast();
 
   // Consume global active MSHA Mine ID from MineContext
@@ -125,7 +127,8 @@ export default function SchedulingPage() {
     try {
       const trainingQuery = query(
         collection(firestore, 'training_documents'),
-        where('mshaMineId', '==', selectedMineId)
+        where('mshaMineId', '==', selectedMineId),
+        where('companyId', '==', profile?.companyId || 'comp_test_001')
       );
 
       unsubTraining = onSnapshot(
@@ -151,7 +154,8 @@ export default function SchedulingPage() {
     try {
       const requiredQuery = query(
         collection(firestore, 'required_documents'),
-        where('mshaMineId', '==', selectedMineId)
+        where('mshaMineId', '==', selectedMineId),
+        where('companyId', '==', profile?.companyId || 'comp_test_001')
       );
 
       unsubRequired = onSnapshot(
@@ -191,7 +195,8 @@ export default function SchedulingPage() {
     try {
       const schedulesQuery = query(
         collection(firestore, 'schedules'),
-        where('mshaMineId', '==', selectedMineId)
+        where('mshaMineId', '==', selectedMineId),
+        where('companyId', '==', profile?.companyId || 'comp_test_001')
       );
 
       unsubSchedules = onSnapshot(
