@@ -114,7 +114,8 @@ export function WorkplaceExamsList({
 
     const q = query(
       collection(activeDb, 'workplace_exams'),
-      where('mshaMineId', '==', selectedMineId)
+      where('mshaMineId', '==', selectedMineId),
+      where('companyId', '==', profile?.companyId || 'comp_test_001')
     );
 
     const unsubscribe = onSnapshot(
