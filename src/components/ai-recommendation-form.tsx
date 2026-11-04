@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, query, updateDoc, where, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useActiveMine } from '@/context/MineContext';
+import { useAuth } from '@/context/AuthContext';
+import { currentMonthKey, isAiLimitReached } from '@/lib/plan-access';
 import { useToast } from '@/hooks/use-toast';
 import {
   workplaceRecommendation,
@@ -49,6 +51,7 @@ const formSchema = z.object({
 
 export function AIRecommendationForm() {
   const { selectedMineId, selectedMineName, selectedMineLabel } = useActiveMine();
+  const { profile, companyPlan } = useAuth();
   const { toast } = useToast();
 
   const [recommendation, setRecommendation] = useState('');
@@ -74,6 +77,46 @@ export function AIRecommendationForm() {
     }
   }, [selectedMineLabel, form]);
 
+
+  async function assertAiAllowed(): Promise<boolean> {
+    if (companyPlan.examsOnly || companyPlan.aiCallsMax === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'AI not included',
+        description: 'AI Safety Advisor is not available on the exams-only trial. Upgrade to use AI.',
+      });
+      return false;
+    }
+    if (!profile?.companyId || companyPlan.aiCallsMax === 'unlimited') return true;
+    const companyRef = doc(db, 'companies', profile.companyId);
+    const snap = await getDoc(companyRef);
+    const data = snap.data() || {};
+    const month = currentMonthKey();
+    const used = data.aiCallsMonth === month ? Number(data.aiCallsCount || 0) : 0;
+    if (isAiLimitReached(companyPlan.aiCallsMax, used)) {
+      toast({
+        variant: 'destructive',
+        title: 'AI limit reached',
+        description: `This plan includes ${companyPlan.aiCallsMax} AI calls per month.`,
+      });
+      return false;
+    }
+    return true;
+  }
+
+  async function recordAiCall() {
+    if (!profile?.companyId || companyPlan.aiCallsMax === 'unlimited') return;
+    const companyRef = doc(db, 'companies', profile.companyId);
+    const snap = await getDoc(companyRef);
+    const data = snap.data() || {};
+    const month = currentMonthKey();
+    const used = data.aiCallsMonth === month ? Number(data.aiCallsCount || 0) : 0;
+    await updateDoc(companyRef, {
+      aiCallsMonth: month,
+      aiCallsCount: used + 1,
+    });
+  }
+
   async function requestAdvisorAnalysis(payload: WorkplaceRecommendationInput) {
     try {
       const response = await fetch('/api/safety-advisor', {
@@ -98,6 +141,7 @@ export function AIRecommendationForm() {
   }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!(await assertAiAllowed())) return;
     setIsLoading(true);
     setRecommendation('');
     try {
@@ -108,6 +152,7 @@ export function AIRecommendationForm() {
         mineName: selectedMineName,
       });
       setRecommendation(safetyText);
+      await recordAiCall();
     } catch (error) {
       console.error('Error fetching AI safety recommendation:', error);
       setRecommendation('Failed to get recommendation. Please try again.');
@@ -118,6 +163,7 @@ export function AIRecommendationForm() {
 
   // 2. Context-Aware Inquiry: Pull recent uncorrected defects from workplace_exams and equipment_exams
   async function handleAnalyzeActiveMineDefects() {
+    if (!(await assertAiAllowed())) return;
     setIsAnalyzingDefects(true);
     setIsLoading(true);
     setRecommendation('');
@@ -306,6 +352,7 @@ export function AIRecommendationForm() {
       });
 
       setRecommendation(safetyText);
+      await recordAiCall();
     } catch (error) {
       console.error('Error analyzing active mine defects:', error);
       setRecommendation(
