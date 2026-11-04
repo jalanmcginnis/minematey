@@ -233,7 +233,8 @@ export function EquipmentPhotoAttachmentLog({
 
     const safeName = sanitizeStorageFileName(selectedFile.name);
     const mineSegment = selectedMineId.replace(/[^\w.\-]+/g, '_');
-    const storagePath = `equipment_photos/${mineSegment}/${Date.now()}_${safeName}`;
+    const companyId = profile?.companyId || 'unknown';
+    const storagePath = `companies/${companyId}/equipment_photos/${mineSegment}/${Date.now()}_${safeName}`;
     let stored = false;
 
     try {
