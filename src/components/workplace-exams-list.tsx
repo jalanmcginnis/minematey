@@ -55,6 +55,7 @@ import {
 import { WorkplaceExamDetailsDialog } from './workplace-exam-details-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { formatSubmittedDate } from '@/lib/format-calendar-date';
+import { isExamPastRetention } from '@/lib/retention';
 
 const ACTION_TYPE_OPTIONS = [
   'Hazard Abated / Repaired',
@@ -137,7 +138,14 @@ export function WorkplaceExamsList({
           return timeB - timeA;
         });
 
-        setExams(fetchedDocs);
+        const expired = fetchedDocs.filter((exam: any) => isExamPastRetention(exam));
+        const kept = fetchedDocs.filter((exam: any) => !isExamPastRetention(exam));
+        expired.forEach((exam: any) => {
+          deleteDoc(doc(activeDb, 'workplace_exams', exam.id)).catch((err) => {
+            console.error('Failed to delete expired workplace exam:', exam.id, err);
+          });
+        });
+        setExams(kept);
         setIsLoading(false);
       },
       (error) => {
@@ -411,7 +419,7 @@ ${profile?.fullName || user?.displayName || 'MineMatey User'}`;
         <CardHeader>
           <CardTitle>Recent Workplace Exams</CardTitle>
           <CardDescription>
-            A log of recently submitted workplace safety examinations and defect resolution status.
+            A log of recently submitted workplace safety examinations and defect resolution status. Records and related photos older than 24 months are removed automatically.
           </CardDescription>
         </CardHeader>
         <CardContent>
