@@ -91,7 +91,7 @@ export function RequiredDocumentCategoryCard({
 }: RequiredDocumentCategoryCardProps) {
   const firestore = useFirestore();
   const storage = useStorage();
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, companyPlan, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -393,7 +393,7 @@ export function RequiredDocumentCategoryCard({
                   </div>
 
                   <Button
-                    type="submit"
+                    type="submit" disabled={companyPlan.examsOnly}
                     size="sm"
                     className="w-full h-8 text-xs"
                     disabled={isSubmitting}
@@ -451,7 +451,7 @@ export function RequiredDocumentCategoryCard({
                   </div>
 
                   <Button
-                    type="submit"
+                    type="submit" disabled={companyPlan.examsOnly}
                     size="sm"
                     className="w-full h-8 text-xs"
                     disabled={isSubmitting}
