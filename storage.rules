@@ -31,21 +31,5 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*|application/pdf');
     }
 
-    // Legacy paths — read-only for signed-in users during transition
-    match /site_photos/{allPaths=**} {
-      allow read: if isSignedIn();
-    }
-    match /equipment_photos/{allPaths=**} {
-      allow read: if isSignedIn();
-    }
-    match /required_documents/{allPaths=**} {
-      allow read: if isSignedIn();
-    }
-    match /training_documents/{allPaths=**} {
-      allow read: if isSignedIn();
-    }
-    match /workplace_exams/{allPaths=**} {
-      allow read: if isSignedIn();
-    }
   }
 }
