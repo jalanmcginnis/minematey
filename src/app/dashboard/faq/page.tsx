@@ -37,6 +37,10 @@ const sections = [
         q: 'Can I export workplace exams?',
         a: 'Yes. The workplace exams list includes a CSV export of the exams currently loaded for the active mine.',
       },
+      {
+        q: 'What happens if a defect is found?',
+        a: 'Any defect found during a workplace exam needs to be corrected. Record the finding and the corrective action on the exam so the condition and the response are both documented.',
+      },
     ],
   },
   {
@@ -66,6 +70,23 @@ const sections = [
       {
         q: 'Are other records deleted on the same schedule?',
         a: 'No. Required documents, training documents, and other mandatory compliance records are preserved. Only photo and attachment files tied to workplace and equipment exams follow the 24-month retention window.',
+      },
+    ],
+  },
+  {
+    title: 'Viewing and sharing documents',
+    items: [
+      {
+        q: 'How do I view a document or photo?',
+        a: 'Open the relevant list (workplace exams, equipment exams, required documents, or training documents), select the record, and use the attachment or file link. Files open from secure company-scoped storage and are available only to signed-in users in the same company.',
+      },
+      {
+        q: 'How are documents shared?',
+        a: 'Documents are shared by company membership, not by public link. Anyone in your company with an allowed role (admin, supervisor, examiner, or user) can view the company’s exams, photos, required documents, and training records for the mines they can access. People outside the company cannot see them.',
+      },
+      {
+        q: 'Can I download records?',
+        a: 'Yes. Workplace and equipment exam lists support CSV export of the loaded records. Individual files can be opened or downloaded from their attachment links.',
       },
     ],
   },
