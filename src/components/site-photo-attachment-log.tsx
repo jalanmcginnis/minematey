@@ -114,7 +114,8 @@ export function SitePhotoAttachmentLog({
     // Query collection("exam_attachments") where("mshaMineId", "==", selectedMineId)
     const attachmentsQuery = query(
       collection(firestore, 'exam_attachments'),
-      where('mshaMineId', '==', selectedMineId)
+      where('mshaMineId', '==', selectedMineId),
+      where('companyId', '==', profile?.companyId || 'comp_test_001')
     );
 
     const unsubscribe = onSnapshot(
