@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
+import { useAuth } from '@/context/AuthContext';
 import { useActiveMine } from '@/context/MineContext';
 import { ActiveMineBadge } from '@/components/active-mine-badge';
 import { Badge } from '@/components/ui/badge';
@@ -125,6 +126,7 @@ const REQUIRED_DOCUMENT_CATEGORIES: CategoryConfig[] = [
 
 export default function RequiredDocumentsPage() {
   const firestore = useFirestore();
+  const { profile } = useAuth();
 
   // Consume global active MSHA Mine ID from MineContext
   const { selectedMineId } = useActiveMine();
@@ -143,7 +145,8 @@ export default function RequiredDocumentsPage() {
     // Subscribe to required_documents filtered by global selectedMineId
     const q = query(
       collection(firestore, 'required_documents'),
-      where('mshaMineId', '==', selectedMineId)
+      where('mshaMineId', '==', selectedMineId),
+      where('companyId', '==', profile?.companyId || 'comp_test_001')
     );
 
     const unsubscribe = onSnapshot(
