@@ -41,6 +41,10 @@ const sections = [
         q: 'What happens if a defect is found?',
         a: 'Any defect found during a workplace exam needs to be corrected. Record the finding and the corrective action on the exam so the condition and the response are both documented.',
       },
+      {
+        q: 'How am I reminded about uncorrected defects?',
+        a: 'The dashboard shows a weekly reminder for uncorrected workplace and equipment exam defects on the active mine. Open defects stay listed until they are marked corrected. You can also email the current open-defect list from that reminder.',
+      },
     ],
   },
   {
