@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { formatSubmittedDate } from '@/lib/format-calendar-date';
+import { isPastRetention } from '@/lib/retention';
 
 export interface ExamAttachmentRecord {
   id: string;
@@ -145,7 +146,19 @@ export function SitePhotoAttachmentLog({
           return timeB - timeA;
         });
 
-        setAttachments(records);
+        const expired = records.filter((record) => isPastRetention(record.createdAt));
+        const kept = records.filter((record) => !isPastRetention(record.createdAt));
+        expired.forEach((record) => {
+          deleteDoc(doc(firestore, 'exam_attachments', record.id)).catch((err) => {
+            console.error('Failed to delete expired site photo record:', record.id, err);
+          });
+          if (record.storagePath && storage) {
+            deleteStorageObject(storage, record.storagePath).catch((err) => {
+              console.error('Failed to delete expired site photo file:', record.storagePath, err);
+            });
+          }
+        });
+        setAttachments(kept);
         setIsLoadingAttachments(false);
       },
       (error) => {
@@ -369,7 +382,7 @@ export function SitePhotoAttachmentLog({
           </div>
           <CardDescription>
             Independently snap and upload site photos or PDF condition reports for mine site{' '}
-            <strong>{selectedMineId}</strong>. You can log multiple photos one after another.
+            <strong>{selectedMineId}</strong>. You can log multiple photos one after another. Photos and PDFs older than 24 months are removed automatically.
           </CardDescription>
         </CardHeader>
         <CardContent>
