@@ -1,24 +1,51 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userProfile() {
+      return firestore.get(/databases/(default)/documents/user_profiles/$(request.auth.uid)).data;
+    }
+
+    function belongsToCompany(companyId) {
+      return isSignedIn() && userProfile().companyId == companyId;
+    }
+
+    function hasAllowedRole() {
+      return userProfile().role in ['admin', 'supervisor', 'examiner', 'user'];
+    }
+
+    // Personal user files
     match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
-    match /workplace_exams/{allPaths=**} {
-      allow read, write: if true;
+
+    // Company-scoped files (new uploads)
+    match /companies/{companyId}/{folder}/{allPaths=**} {
+      allow read: if belongsToCompany(companyId) && hasAllowedRole();
+      allow write: if belongsToCompany(companyId)
+                   && hasAllowedRole()
+                   && request.resource.size < 20 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*|application/pdf');
     }
+
+    // Legacy paths — read-only for signed-in users during transition
     match /site_photos/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if isSignedIn();
     }
     match /equipment_photos/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if isSignedIn();
     }
-    // Shared compliance files. Open during testing, same as the collections above.
     match /required_documents/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if isSignedIn();
     }
     match /training_documents/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if isSignedIn();
+    }
+    match /workplace_exams/{allPaths=**} {
+      allow read: if isSignedIn();
     }
   }
 }
