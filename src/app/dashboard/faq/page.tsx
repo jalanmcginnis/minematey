@@ -130,7 +130,7 @@ const sections = [
       },
       {
         q: 'What is limited on lower plans?',
-        a: 'Lower tiers limit the number of users, mines, and AI Safety Advisor calls. The Starter trial is limited to workplace and equipment exams. Higher tiers unlock full features and higher or unlimited AI usage.',
+        a: 'Lower tiers limit the number of users, mines, and AI Safety Advisor calls. The Starter trial is exams only: no photos, document uploads, or AI. Higher tiers unlock full features and higher or unlimited AI usage. Admin shows current user and mine usage against the plan.',
       },
     ],
   },
