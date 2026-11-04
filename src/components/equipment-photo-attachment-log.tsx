@@ -195,6 +195,10 @@ export function EquipmentPhotoAttachmentLog({
 
   // Independent Upload Handler for standalone equipment photo/PDF documentation
   const handleUploadAttachment = async (e: FormEvent) => {
+    if (companyPlan.examsOnly) {
+      toast({ variant: 'destructive', title: 'Upgrade required', description: 'Photo and file uploads are not included on the exams-only trial.' });
+      return;
+    }
     e.preventDefault();
 
     if (authLoading) {
@@ -369,6 +373,9 @@ export function EquipmentPhotoAttachmentLog({
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {companyPlan.examsOnly && (
+            <p className="text-sm text-amber-700">Photo and file uploads are not included on the exams-only trial. Upgrade to add photos.</p>
+          )}
           <form onSubmit={handleUploadAttachment} className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-2">
@@ -453,7 +460,7 @@ export function EquipmentPhotoAttachmentLog({
               </div>
             </div>
 
-            <Button type="submit" disabled={isUploading}>
+            <Button type="submit" disabled={isUploading || companyPlan.examsOnly}>
               {isUploading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
