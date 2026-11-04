@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db, firebaseApp } from '@/firebase';
+import { resolvePlanAccess } from '@/lib/plan-access';
 
 export interface UserProfileData {
   companyId: string;
@@ -23,15 +24,21 @@ export interface UserProfileData {
 
 export interface CompanyPlanData {
   planTier: string;
+  label: string;
   maxMines: number;
   maxUsers: number;
+  aiCallsMax: number | 'unlimited';
+  examsOnly: boolean;
   subscriptionStatus: string;
 }
 
 export const DEFAULT_COMPANY_PLAN: CompanyPlanData = {
-  planTier: 'small_operator',
-  maxMines: 3,
-  maxUsers: 5,
+  planTier: 'starter',
+  label: 'Starter',
+  maxMines: 1,
+  maxUsers: 1,
+  aiCallsMax: 10,
+  examsOnly: false,
   subscriptionStatus: 'active',
 };
 
@@ -71,18 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (companySnap.exists()) {
         const data = companySnap.data();
+        const access = resolvePlanAccess({
+          planTier: data.planTier,
+          subscriptionStatus: data.subscriptionStatus,
+          trialEndsAt: data.trialEndsAt,
+          maxMines: data.maxMines,
+          maxUsers: data.maxUsers,
+        });
         setCompanyPlan({
-          planTier: data.planTier || DEFAULT_COMPANY_PLAN.planTier,
-          maxMines:
-            typeof data.maxMines === 'number'
-              ? data.maxMines
-              : DEFAULT_COMPANY_PLAN.maxMines,
-          maxUsers:
-            typeof data.maxUsers === 'number'
-              ? data.maxUsers
-              : DEFAULT_COMPANY_PLAN.maxUsers,
-          subscriptionStatus:
-            data.subscriptionStatus || DEFAULT_COMPANY_PLAN.subscriptionStatus,
+          ...access,
+          subscriptionStatus: data.subscriptionStatus || 'active',
         });
       } else {
         setCompanyPlan(DEFAULT_COMPANY_PLAN);
