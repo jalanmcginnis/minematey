@@ -195,6 +195,24 @@ export function EquipmentExamsList({
     );
   };
 
+
+  const openDefects = exams.filter((exam: any) => {
+    if (isExamCorrected(exam)) return false;
+    const rawStatus = String(exam.status || '').toLowerCase();
+    const rawSafetyStatus = String(exam.safetyStatus || exam.status || '').toLowerCase();
+    const defectText = String(exam.defectDetails || exam.defectsFound || '').trim();
+    return (
+      rawStatus === 'open' ||
+      rawStatus === 'under repair' ||
+      rawStatus.includes('defect') ||
+      rawSafetyStatus.includes('defect') ||
+      rawSafetyStatus.includes('red') ||
+      rawSafetyStatus === 'needs_repair' ||
+      rawSafetyStatus === 'out_of_service' ||
+      (defectText.length > 0 && defectText.toLowerCase() !== 'none')
+    );
+  });
+
   const getExamDateString = (exam: any) => {
     if (exam.examDate?.toDate) {
       return exam.examDate.toDate().toLocaleDateString();
@@ -438,6 +456,39 @@ ${profile?.fullName || user?.displayName || 'MineMatey User'}`;
 
   return (
     <>
+      <Card className="border-amber-500/50 bg-amber-500/5">
+        <CardHeader>
+          <CardTitle>Uncorrected Defects</CardTitle>
+          <CardDescription>
+            Equipment defects stay listed here until they are marked corrected.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="py-4 text-center text-sm">Loading defects...</p>
+          ) : openDefects.length > 0 ? (
+            <div className="space-y-2">
+              {openDefects.map((exam: any) => (
+                <button
+                  key={exam.id}
+                  type="button"
+                  onClick={() => setSelectedDocumentId(exam.id)}
+                  className="flex w-full items-start justify-between gap-3 rounded-md border bg-background px-3 py-2 text-left"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{exam.equipmentId || exam.equipmentUnit || exam.equipmentNumber || 'Equipment Exam'}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{exam.defectDetails || exam.defectsFound || 'Open defect'}</span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">{getExamDateString(exam)}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="py-4 text-center text-sm text-muted-foreground">No uncorrected equipment defects.</p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Recent Equipment Exams</CardTitle>
