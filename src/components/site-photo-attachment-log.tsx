@@ -74,7 +74,7 @@ export function SitePhotoAttachmentLog({
 }: SitePhotoAttachmentLogProps) {
   const firestore = useFirestore();
   const storage = useStorage();
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, companyPlan, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const examinerName = user?.isAnonymous
