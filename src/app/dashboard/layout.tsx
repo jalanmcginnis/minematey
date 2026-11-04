@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Wrench,
   CalendarDays,
+  CircleHelp,
   LogOut,
   Loader2,
   FileText,
@@ -61,6 +62,7 @@ export default function DashboardLayout({
     { href: '/dashboard/required-documents', icon: FileText, label: 'Required Documents' },
     { href: '/dashboard/training-documents', icon: BookUser, label: 'Training Documents' },
     { href: '/dashboard/scheduling', icon: CalendarDays, label: 'Scheduling' },
+    { href: '/dashboard/faq', icon: CircleHelp, label: 'FAQ' },
     ...(canAccessAdmin
       ? [{ href: '/admin', icon: Settings, label: 'Admin Settings' }]
       : []),
