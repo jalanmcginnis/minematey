@@ -114,7 +114,8 @@ export function EquipmentExamsList({
 
     const q = query(
       collection(activeDb, 'equipment_exams'),
-      where('mshaMineId', '==', selectedMineId)
+      where('mshaMineId', '==', selectedMineId),
+      where('companyId', '==', profile?.companyId || 'comp_test_001')
     );
 
     const unsubscribe = onSnapshot(
