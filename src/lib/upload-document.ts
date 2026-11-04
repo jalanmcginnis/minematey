@@ -125,7 +125,8 @@ export async function uploadDocumentRecord(input: UploadDocumentRecordInput): Pr
   const safeName = sanitizeStorageFileName(input.file.name);
   const mineSegment = (input.mshaMineId || 'mine').replace(/[^\w.\-]+/g, '_');
   const folderSegment = (input.folder || 'files').replace(/[^\w.\-]+/g, '_');
-  const storagePath = `${input.collectionName}/${mineSegment}/${folderSegment}/${Date.now()}_${safeName}`;
+  const companyId = input.companyId || 'unknown';
+  const storagePath = `companies/${companyId}/${input.collectionName}/${mineSegment}/${folderSegment}/${Date.now()}_${safeName}`;
   const today = new Date().toISOString().split('T')[0];
   const effectiveDate = input.date || input.completionDate || today;
 
