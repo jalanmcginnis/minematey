@@ -128,6 +128,15 @@ export function RequiredDocumentCategoryCard({
 
   const handleAddDocument = async (e: FormEvent) => {
     e.preventDefault();
+    if (companyPlan.examsOnly) {
+      toast({
+        variant: 'destructive',
+        title: 'Upgrade required',
+        description: 'Document uploads are not included on the exams-only trial.',
+      });
+      return;
+    }
+
 
     if (authLoading) {
       toast({
