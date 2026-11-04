@@ -190,6 +190,21 @@ export function WorkplaceExamsList({
     );
   };
 
+
+  const openDefects = exams.filter((exam: any) => {
+    if (isExamCorrected(exam)) return false;
+    const rawStatus = String(exam.status || '').toLowerCase();
+    const rawSafetyStatus = String(exam.safetyStatus || exam.status || '').toLowerCase();
+    return (
+      rawStatus === 'open' ||
+      rawStatus === 'under repair' ||
+      rawStatus.includes('defect') ||
+      rawSafetyStatus === 'at_risk' ||
+      rawSafetyStatus === 'unsafe' ||
+      rawSafetyStatus.includes('defect')
+    );
+  });
+
   const getExamDateString = (exam: any) => {
     if (exam.examDate?.toDate) {
       return exam.examDate.toDate().toLocaleDateString();
@@ -415,6 +430,39 @@ ${profile?.fullName || user?.displayName || 'MineMatey User'}`;
 
   return (
     <>
+      <Card className="border-amber-500/50 bg-amber-500/5">
+        <CardHeader>
+          <CardTitle>Uncorrected Defects</CardTitle>
+          <CardDescription>
+            Workplace defects stay listed here until they are marked corrected.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="py-4 text-center text-sm">Loading defects...</p>
+          ) : openDefects.length > 0 ? (
+            <div className="space-y-2">
+              {openDefects.map((exam: any) => (
+                <button
+                  key={exam.id}
+                  type="button"
+                  onClick={() => setSelectedDocumentId(exam.id)}
+                  className="flex w-full items-start justify-between gap-3 rounded-md border bg-background px-3 py-2 text-left"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{exam.area?.trim() || 'Workplace Exam'}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{exam.findings || exam.defectDetails || 'Open defect'}</span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">{getExamDateString(exam)}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="py-4 text-center text-sm text-muted-foreground">No uncorrected workplace defects.</p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Recent Workplace Exams</CardTitle>
