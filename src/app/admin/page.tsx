@@ -298,6 +298,9 @@ export default function AdministrationPage() {
   const isMineLimitReached = existingMines.length >= companyPlan.maxMines;
   const isUserLimitReached = existingUsers.length >= companyPlan.maxUsers;
 
+  const planSummary = `${companyPlan.label || companyPlan.planTier}: ${existingUsers.length}/${companyPlan.maxUsers} users, ${existingMines.length}/${companyPlan.maxMines} mines${companyPlan.examsOnly ? ' · exams-only trial' : ''}`;
+
+
   const disableAddMineButton =
     isSavingMine || (isMineLimitReached && !devBypassPlanLimits);
   const disableAddUserButton =
@@ -836,7 +839,7 @@ export default function AdministrationPage() {
               variant={isMineLimitReached ? 'destructive' : 'outline'}
               className="w-fit font-mono text-xs"
             >
-              {existingMines.length} / {companyPlan.maxMines} Mine Sites Used
+              {planSummary}
             </Badge>
           </div>
         </CardHeader>
