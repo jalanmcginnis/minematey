@@ -3,8 +3,8 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, signInAnonymously } from 'firebase/auth';
-import { AlertCircle, Loader2, UserCheck } from 'lucide-react';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { AlertCircle, Loader2, Mail } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -37,7 +37,6 @@ export function Login({
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [isSigningInEmail, setIsSigningInEmail] = useState(false);
-  const [isSigningInGuest, setIsSigningInGuest] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
@@ -81,22 +80,6 @@ export function Login({
       setAuthError(formatAuthErrorMessage(error));
     } finally {
       setIsSigningInEmail(false);
-    }
-  };
-
-  const handleGuestSignIn = async () => {
-    setAuthError(null);
-    setIsSigningInGuest(true);
-    try {
-      await signInAnonymously(auth);
-      router.push('/dashboard');
-    } catch (error: any) {
-      console.error('Error during anonymous guest sign-in:', error);
-      setAuthError(
-        error?.message || 'Unable to start guest session. Please try again.'
-      );
-    } finally {
-      setIsSigningInGuest(false);
     }
   };
 
@@ -181,7 +164,7 @@ export function Login({
                 <Button
                   type="submit"
                   className="w-full bg-[#F28C28] text-white hover:bg-[#F28C28]/90"
-                  disabled={isSigningInEmail || isSigningInGuest}
+                  disabled={isSigningInEmail}
                 >
                   {isSigningInEmail ? (
                     <>
@@ -200,30 +183,23 @@ export function Login({
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
                   <span className="bg-white px-2 text-[#6C757D]">
-                    Or Bypass Login
+                    Need help?
                   </span>
                 </div>
               </div>
 
               <Button
+                asChild
                 type="button"
                 variant="secondary"
                 className="w-full border border-[#6C757D]/40 bg-white text-[#343A40] hover:bg-[#F8F9FA]"
-                onClick={handleGuestSignIn}
-                disabled={isSigningInEmail || isSigningInGuest}
               >
-                {isSigningInGuest ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Starting Guest Session...
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="mr-2 h-4 w-4" />
-                    Continue as Guest
-                  </>
-                )}
+                <a href="mailto:minematey@proton.me?subject=MineMatey%20information%20request">
+                  <Mail className="mr-2 h-4 w-4" />
+                  Contact MineMatey
+                </a>
               </Button>
+
             </CardContent>
           </Card>
         </div>
