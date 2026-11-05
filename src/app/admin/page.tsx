@@ -392,7 +392,7 @@ export default function AdministrationPage() {
       console.error('Error adding mine site to collection("mines"):', error);
       toast({
         variant: 'destructive',
-        title: 'Failed to {idTypeInput === 'contractor' ? 'Add Contractor ID' : 'Add Mine ID'}',
+        title: `Failed to ${idTypeInput === 'contractor' ? 'add contractor ID' : 'add mine ID'}`,
         description: error?.message || 'Could not save mine site.',
       });
     } finally {
