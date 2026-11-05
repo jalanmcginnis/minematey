@@ -81,6 +81,7 @@ interface MineDocument {
   companyId: string;
   status: string;
   active: boolean;
+  idType?: 'mine' | 'contractor';
   createdAt?: string;
   isFallback?: boolean;
 }
@@ -126,6 +127,7 @@ export default function AdministrationPage() {
   // --- Card 1: "Manage Mine Sites" State ---
   const [firestoreMines, setFirestoreMines] = useState<MineDocument[]>([]);
   const [isLoadingMines, setIsLoadingMines] = useState<boolean>(true);
+  const [idTypeInput, setIdTypeInput] = useState<'mine' | 'contractor'>('mine');
   const [mshaMineIdInput, setMshaMineIdInput] = useState<string>('');
   const [mineNameInput, setMineNameInput] = useState<string>('');
   const [stateInput, setStateInput] = useState<string>('');
@@ -190,6 +192,7 @@ export default function AdministrationPage() {
                 companyId: data.companyId || activeCompanyId,
                 status: statusStr,
                 active: isActive,
+                idType: data.idType === 'contractor' ? 'contractor' : 'mine',
                 createdAt: data.createdAt || '',
               };
             });
@@ -323,11 +326,21 @@ export default function AdministrationPage() {
     const mineName = mineNameInput.trim();
     const state = stateInput.trim();
 
-    if (!mshaMineId || !mineName || !state) {
+    if (!mshaMineId || !mineName || (idTypeInput === 'mine' && !state)) {
       toast({
         variant: 'destructive',
         title: 'Missing Fields',
-        description: 'Please fill out MSHA Mine ID, Mine Name, and State.',
+        description: idTypeInput === 'contractor'
+          ? 'Please enter a contractor ID and name.'
+          : 'Please fill out MSHA Mine ID, Mine Name, and State.',
+      });
+      return;
+    }
+    if (idTypeInput === 'contractor' && (mshaMineId.length < 3 || mshaMineId.length > 5)) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Contractor ID',
+        description: 'Contractor ID must be 3 to 5 characters.',
       });
       return;
     }
@@ -357,9 +370,10 @@ export default function AdministrationPage() {
       }
 
       await addDoc(collection(db, 'mines'), {
-        mshaMineId,
+        mshaMineId: idTypeInput === 'contractor' ? mshaMineId.toUpperCase() : mshaMineId,
         mineName,
         state,
+        idType: idTypeInput,
         companyId: profile?.companyId || 'comp_test_001',
         status: 'Active',
         active: true,
@@ -367,7 +381,7 @@ export default function AdministrationPage() {
       });
 
       toast({
-        title: 'Mine Site Added',
+        title: idTypeInput === 'contractor' ? 'Contractor ID Added' : 'Mine Site Added',
         description: `${mineName} (${mshaMineId}) has been added.`,
       });
 
@@ -378,7 +392,7 @@ export default function AdministrationPage() {
       console.error('Error adding mine site to collection("mines"):', error);
       toast({
         variant: 'destructive',
-        title: 'Failed to Add Mine Site',
+        title: 'Failed to {idTypeInput === 'contractor' ? 'Add Contractor ID' : 'Add Mine ID'}',
         description: error?.message || 'Could not save mine site.',
       });
     } finally {
@@ -829,10 +843,10 @@ export default function AdministrationPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Mountain className="h-5 w-5 text-primary" />
-                <CardTitle>Manage Mine Sites</CardTitle>
+                <CardTitle>Manage IDs</CardTitle>
               </div>
               <CardDescription>
-                Add or remove MSHA Mine Sites for your company. Changes immediately update the global Active Mine dropdown.
+                Add a mine ID or a contractor ID. Both appear in the same list and in the dashboard selector.
               </CardDescription>
             </div>
             <Badge
@@ -870,18 +884,30 @@ export default function AdministrationPage() {
             </div>
           )}
 
-          {/* Add Mine Site Form */}
+          {/* {idTypeInput === 'contractor' ? 'Add Contractor ID' : 'Add Mine ID'} Form */}
           <form
             onSubmit={handleAddMineSite}
             className="rounded-lg border bg-muted/30 p-4 space-y-4"
           >
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-4">
               <div className="space-y-2">
-                <Label htmlFor="msha-mine-id-input">MSHA Mine ID</Label>
+                <Label htmlFor="id-type-input">Type</Label>
+                <select
+                  id="id-type-input"
+                  value={idTypeInput}
+                  onChange={(e) => setIdTypeInput(e.target.value as 'mine' | 'contractor')}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="mine">Mine ID</option>
+                  <option value="contractor">Contractor ID</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="msha-mine-id-input">{idTypeInput === 'contractor' ? 'Contractor ID' : 'MSHA Mine ID'}</Label>
                 <Input
                   id="msha-mine-id-input"
                   type="text"
-                  placeholder="e.g., 13-00789"
+                  placeholder={idTypeInput === 'contractor' ? 'AB12' : 'e.g., 13-00789'}
                   value={mshaMineIdInput}
                   onChange={(e) => setMshaMineIdInput(e.target.value)}
                   disabled={disableAddMineButton}
@@ -925,7 +951,7 @@ export default function AdministrationPage() {
               ) : (
                 <>
                   <Plus className="mr-2 h-4 w-4" />
-                  Add Mine Site
+                  {idTypeInput === 'contractor' ? 'Add Contractor ID' : 'Add Mine ID'}
                 </>
               )}
             </Button>
@@ -936,7 +962,8 @@ export default function AdministrationPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>MSHA Mine ID</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>ID</TableHead>
                   <TableHead>Mine Name</TableHead>
                   <TableHead>State</TableHead>
                   <TableHead>Status</TableHead>
@@ -946,7 +973,7 @@ export default function AdministrationPage() {
               <TableBody>
                 {isLoadingMines ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6">
+                    <TableCell colSpan={6} className="text-center py-6">
                       Loading company mine sites...
                     </TableCell>
                   </TableRow>
@@ -955,6 +982,7 @@ export default function AdministrationPage() {
                     const isCurrentlySelected = selectedMineId === mine.mshaMineId;
                     return (
                       <TableRow key={mine.docId}>
+                        <TableCell>{mine.idType === 'contractor' ? 'Contractor' : 'Mine'}</TableCell>
                         <TableCell className="font-mono font-semibold">
                           {mine.mshaMineId}
                         </TableCell>
@@ -1026,7 +1054,7 @@ export default function AdministrationPage() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6">
+                    <TableCell colSpan={6} className="text-center py-6">
                       No mine sites found. Add a mine site above.
                     </TableCell>
                   </TableRow>
