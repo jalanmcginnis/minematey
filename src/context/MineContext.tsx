@@ -126,10 +126,11 @@ export function MineProvider({ children }: { children: ReactNode }) {
 
               if (!mineId) return;
 
+              const idType = data.idType === 'contractor' ? 'Contractor' : 'Mine';
               fetchedMines.push({
                 id: mineId,
                 name: mineName,
-                label: `${mineName} (${mineId})`,
+                label: `${idType}: ${mineName} (${mineId})`,
                 location: data.state || data.location || data.stateLocation || '',
                 firestoreDocId: docSnap.id,
                 active: data.active !== false && String(data.status || 'Active').toLowerCase() !== 'inactive',
