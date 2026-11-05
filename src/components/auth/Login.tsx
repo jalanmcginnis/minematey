@@ -3,7 +3,7 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { AlertCircle, Loader2, Mail } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { addDoc, collection, doc, setDoc } from 'firebase/firestore';
+import { db } from '@/firebase';
 import { useAuth } from '@/context/AuthContext';
 
 type LoginProps = {
@@ -33,8 +35,13 @@ export function Login({
   const { user, loading, auth } = useAuth();
   const router = useRouter();
 
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [companyName, setCompanyName] = useState('');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [mineId, setMineId] = useState('');
+  const [contractorId, setContractorId] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [isSigningInEmail, setIsSigningInEmail] = useState(false);
 
@@ -83,6 +90,77 @@ export function Login({
     }
   };
 
+
+  const handleSignUp = async (e: FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    const cleanMine = mineId.trim();
+    const cleanContractor = contractorId.trim().toUpperCase();
+    if (!companyName.trim() || !fullName.trim() || !email.trim() || !password) {
+      setAuthError('Please complete company name, your name, email, and password.');
+      return;
+    }
+    if (!cleanMine && !cleanContractor) {
+      setAuthError('Enter a mine ID, a contractor ID, or both.');
+      return;
+    }
+    if (cleanContractor && (cleanContractor.length < 3 || cleanContractor.length > 5)) {
+      setAuthError('Contractor ID must be 3 to 5 characters.');
+      return;
+    }
+    setIsSigningInEmail(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const companyId = `comp_${Date.now()}`;
+      const ids = [cleanMine, cleanContractor].filter(Boolean);
+      await setDoc(doc(db, 'companies', companyId), {
+        companyName: companyName.trim(),
+        planTier: 'starter',
+        subscriptionStatus: 'active',
+        createdAt: new Date().toISOString(),
+      });
+      await setDoc(doc(db, 'user_profiles', cred.user.uid), {
+        uid: cred.user.uid,
+        email: email.trim(),
+        fullName: fullName.trim(),
+        role: 'admin',
+        companyId,
+        assignedMines: ids,
+        createdAt: new Date().toISOString(),
+      });
+      if (cleanMine) {
+        await addDoc(collection(db, 'mines'), {
+          mshaMineId: cleanMine,
+          mineName: companyName.trim(),
+          idType: 'mine',
+          state: '',
+          companyId,
+          status: 'Active',
+          active: true,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      if (cleanContractor) {
+        await addDoc(collection(db, 'mines'), {
+          mshaMineId: cleanContractor,
+          mineName: companyName.trim(),
+          idType: 'contractor',
+          state: '',
+          companyId,
+          status: 'Active',
+          active: true,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      router.push('/dashboard');
+    } catch (error: any) {
+      console.error('Error during sign up:', error);
+      setAuthError(error?.message || 'Unable to create the account.');
+    } finally {
+      setIsSigningInEmail(false);
+    }
+  };
+
   if (loading || user) {
     return (
       <div
@@ -114,10 +192,10 @@ export function Login({
           <Card className="border border-[#6C757D]/25 bg-white shadow-sm">
             <CardHeader className="pb-4">
               <CardTitle className={`text-xl text-[#343A40] ${headingFontClassName}`}>
-                Login to MineMatey
+                {mode === 'signin' ? 'Login to MineMatey' : 'Create a MineMatey account'}
               </CardTitle>
               <CardDescription className="text-xs text-[#6C757D]">
-                Sign in with your assigned MineMatey credentials or launch the preview environment.
+                {mode === 'signin' ? 'Sign in with your MineMatey credentials.' : 'Add a mine ID, a contractor ID, or both.'}
               </CardDescription>
             </CardHeader>
 
@@ -132,7 +210,28 @@ export function Login({
                 </div>
               )}
 
-              <form onSubmit={handleEmailSignIn} className="grid gap-4">
+              <form onSubmit={mode === 'signin' ? handleEmailSignIn : handleSignUp} className="grid gap-4">
+                {mode === 'signup' && (
+                  <>
+                    <div className="grid gap-2">
+                      <Label htmlFor="company" className="text-[#343A40]">Company name</Label>
+                      <Input id="company" value={companyName} onChange={(e) => setCompanyName(e.target.value)} required className="bg-white focus-visible:ring-[#F28C28]" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="fullName" className="text-[#343A40]">Your name</Label>
+                      <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="bg-white focus-visible:ring-[#F28C28]" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="mineId" className="text-[#343A40]">Mine ID (optional)</Label>
+                      <Input id="mineId" value={mineId} onChange={(e) => setMineId(e.target.value)} placeholder="13-00123" className="bg-white focus-visible:ring-[#F28C28]" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="contractorId" className="text-[#343A40]">Contractor ID (optional, 3-5 characters)</Label>
+                      <Input id="contractorId" value={contractorId} onChange={(e) => setContractorId(e.target.value)} placeholder="AB12" maxLength={5} className="bg-white focus-visible:ring-[#F28C28]" />
+                    </div>
+                  </>
+                )}
+
                 <div className="grid gap-2">
                   <Label htmlFor="email" className="text-[#343A40]">Email</Label>
                   <Input
@@ -155,7 +254,7 @@ export function Login({
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
+                    autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
                     required
                     className="bg-white focus-visible:ring-[#F28C28]"
                   />
@@ -171,11 +270,26 @@ export function Login({
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Signing In...
                     </>
-                  ) : (
+                  ) : mode === 'signin' ? (
                     'Sign In'
+                  ) : (
+                    'Create Account'
                   )}
                 </Button>
               </form>
+
+              
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full text-[#343A40]"
+                onClick={() => {
+                  setAuthError(null);
+                  setMode(mode === 'signin' ? 'signup' : 'signin');
+                }}
+              >
+                {mode === 'signin' ? 'Need an account? Create one' : 'Already have an account? Sign in'}
+              </Button>
 
               <div className="relative my-1">
                 <div className="absolute inset-0 flex items-center">
