@@ -3,7 +3,7 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { AlertCircle, Loader2, Mail } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,7 @@ export function Login({
   const { user, loading, auth } = useAuth();
   const router = useRouter();
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
   const [companyName, setCompanyName] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -90,6 +90,28 @@ export function Login({
     }
   };
 
+
+
+  const handlePasswordReset = async (e: FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    if (!email.trim()) {
+      setAuthError('Enter the email address for the account.');
+      return;
+    }
+    setIsSigningInEmail(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setAuthError(null);
+      setMode('signin');
+      alert('Password reset email sent. Check your inbox.');
+    } catch (error: any) {
+      console.error('Error sending password reset email:', error);
+      setAuthError(error?.message || 'Unable to send the reset email.');
+    } finally {
+      setIsSigningInEmail(false);
+    }
+  };
 
   const handleSignUp = async (e: FormEvent) => {
     e.preventDefault();
@@ -192,10 +214,10 @@ export function Login({
           <Card className="border border-[#6C757D]/25 bg-white shadow-sm">
             <CardHeader className="pb-4">
               <CardTitle className={`text-xl text-[#343A40] ${headingFontClassName}`}>
-                {mode === 'signin' ? 'Login to MineMatey' : 'Create a MineMatey account'}
+                {mode === 'reset' ? 'Reset your password' : mode === 'signin' ? 'Login to MineMatey' : 'Create a MineMatey account'}
               </CardTitle>
               <CardDescription className="text-xs text-[#6C757D]">
-                {mode === 'signin' ? 'Sign in with your MineMatey credentials.' : 'Add a mine ID, a contractor ID, or both.'}
+                {mode === 'reset' ? 'We will email you a link to choose a new password.' : mode === 'signin' ? 'Sign in with your MineMatey credentials.' : 'Add a mine ID, a contractor ID, or both.'}
               </CardDescription>
             </CardHeader>
 
@@ -210,7 +232,7 @@ export function Login({
                 </div>
               )}
 
-              <form onSubmit={mode === 'signin' ? handleEmailSignIn : handleSignUp} className="grid gap-4">
+              <form onSubmit={mode === 'reset' ? handlePasswordReset : mode === 'signin' ? handleEmailSignIn : handleSignUp} className="grid gap-4">
                 {mode === 'signup' && (
                   <>
                     <div className="grid gap-2">
@@ -246,6 +268,7 @@ export function Login({
                   />
                 </div>
 
+                {mode !== 'reset' && (
                 <div className="grid gap-2">
                   <Label htmlFor="password" className="text-[#343A40]">Password</Label>
                   <Input
@@ -259,6 +282,13 @@ export function Login({
                     className="bg-white focus-visible:ring-[#F28C28]"
                   />
                 </div>
+                )}
+
+                {mode === 'signin' && (
+                  <button type="button" className="justify-self-start text-xs text-[#F28C28] hover:underline" onClick={() => { setAuthError(null); setMode('reset'); }}>
+                    Forgot password?
+                  </button>
+                )}
 
                 <Button
                   type="submit"
@@ -270,6 +300,8 @@ export function Login({
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Signing In...
                     </>
+                  ) : mode === 'reset' ? (
+                    'Send reset email'
                   ) : mode === 'signin' ? (
                     'Sign In'
                   ) : (
@@ -288,7 +320,7 @@ export function Login({
                   setMode(mode === 'signin' ? 'signup' : 'signin');
                 }}
               >
-                {mode === 'signin' ? 'Need an account? Create one' : 'Already have an account? Sign in'}
+                {mode === 'signin' ? 'Need an account? Create one' : mode === 'reset' ? 'Back to sign in' : 'Already have an account? Sign in'}
               </Button>
 
               <div className="relative my-1">
