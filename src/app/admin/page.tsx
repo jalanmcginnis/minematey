@@ -763,7 +763,7 @@ export default function AdministrationPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
       {/* Page Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -837,7 +837,7 @@ export default function AdministrationPage() {
       </Card>
 
       {/* Card 1: "Manage Mine Sites" */}
-      <Card>
+      <Card className="min-w-0 max-w-full overflow-hidden">
         <CardHeader>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
@@ -958,7 +958,36 @@ export default function AdministrationPage() {
           </form>
 
           {/* Existing Mines Table */}
-          <div className="rounded-md border overflow-x-auto">
+          <div className="space-y-2 md:hidden">
+            {isLoadingMines ? (
+              <p className="py-4 text-center text-sm">Loading IDs...</p>
+            ) : displayedMines.length > 0 ? (
+              displayedMines.map((mine) => (
+                <div key={mine.docId} className="rounded-md border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">{mine.idType === 'contractor' ? 'Contractor' : 'Mine'}</p>
+                      <p className="truncate font-mono text-sm font-semibold">{mine.mshaMineId}</p>
+                      <p className="truncate text-sm">{mine.mineName}</p>
+                      <p className="text-xs text-muted-foreground">{mine.state || '—'} · {mine.active ? 'Active' : 'Inactive'}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {mine.active && selectedMineId !== mine.mshaMineId && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedMineId(mine.mshaMineId)}>Select</Button>
+                    )}
+                    <Button type="button" variant="outline" size="sm" onClick={() => handleToggleMineStatus(mine)}>
+                      {mine.active ? 'Deactivate' : 'Activate'}
+                    </Button>
+                    <Button type="button" variant="destructive" size="sm" onClick={() => handleDeleteMineSite(mine)}>Delete</Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="py-4 text-center text-sm text-muted-foreground">No IDs yet.</p>
+            )}
+          </div>
+          <div className="hidden min-w-0 max-w-full overflow-x-auto rounded-md border md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1068,7 +1097,7 @@ export default function AdministrationPage() {
       <Separator />
 
       {/* Card 2: "Company User Roster" */}
-      <Card>
+      <Card className="min-w-0 max-w-full overflow-hidden">
         <CardHeader>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
@@ -1270,7 +1299,7 @@ export default function AdministrationPage() {
           </form>
 
           {/* Company Users Table */}
-          <div className="rounded-md border overflow-x-auto">
+          <div className="min-w-0 max-w-full overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
