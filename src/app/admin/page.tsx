@@ -23,7 +23,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { initializeApp, getApps, deleteApp, type FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, deleteApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import {
   collection,
@@ -35,6 +35,7 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { firebaseConfig } from '@/firebase/config';
@@ -106,25 +107,23 @@ export default function AdministrationPage() {
   const { selectedMineId, setSelectedMineId, mineOptions } = useActiveMine();
   const { toast } = useToast();
 
+  // Consistent Company ID resolution
   const activeCompanyId = profile?.companyId || 'comp_test_001';
 
-  // Role-Based Navigation Guard & Soft-Lock Protection:
-  // Render if profile?.role === "admin" OR user?.email === "jalanmcginnis@gmail.com" OR profile?.fullName === "Guest Supervisor"
+  // Role verification
   const isGuestSupervisor =
     Boolean(user?.isAnonymous) || profile?.fullName === 'Guest Supervisor';
   const isMasterAdminEmail =
-    user?.email === 'jalanmcginnis@gmail.com' ||
     user?.email?.toLowerCase() === 'jalanmcginnis@gmail.com';
   const isAdmin =
     isGuestSupervisor ||
     isMasterAdminEmail ||
-    profile?.role === 'admin' ||
     profile?.role?.toLowerCase() === 'admin';
 
-  // Soft-lock developmental testing override toggle
+  // Bypass toggle
   const [devBypassPlanLimits, setDevBypassPlanLimits] = useState<boolean>(false);
 
-  // --- Card 1: "Manage Mine Sites" State ---
+  // Mine Sites State
   const [firestoreMines, setFirestoreMines] = useState<MineDocument[]>([]);
   const [isLoadingMines, setIsLoadingMines] = useState<boolean>(true);
   const [idTypeInput, setIdTypeInput] = useState<'mine' | 'contractor'>('mine');
@@ -133,7 +132,7 @@ export default function AdministrationPage() {
   const [stateInput, setStateInput] = useState<string>('');
   const [isSavingMine, setIsSavingMine] = useState<boolean>(false);
 
-  // --- Card 2: "Company User Roster" State ---
+  // User Roster State
   const [companyUsers, setCompanyUsers] = useState<CompanyUserRecord[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(true);
   const [fullNameInput, setFullNameInput] = useState<string>('');
@@ -141,18 +140,25 @@ export default function AdministrationPage() {
   const [passwordInput, setPasswordInput] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [roleInput, setRoleInput] = useState<'examiner' | 'supervisor' | 'admin'>('examiner');
-  const [assignedMinesInput, setAssignedMinesInput] = useState<string[]>(['13-00123']);
+  const [assignedMinesInput, setAssignedMinesInput] = useState<string[]>([]);
   const [isSavingUser, setIsSavingUser] = useState<boolean>(false);
   const [userFormError, setUserFormError] = useState<string | null>(null);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState<boolean>(false);
 
-  // Edit User Modal State
+  // Edit User State
   const [editingUser, setEditingUser] = useState<CompanyUserRecord | null>(null);
   const [editUserRole, setEditUserRole] = useState<'examiner' | 'supervisor' | 'admin'>('examiner');
   const [editUserMines, setEditUserMines] = useState<string[]>([]);
   const [isUpdatingUser, setIsUpdatingUser] = useState<boolean>(false);
 
-  // Subscribe to collection("mines") where("companyId", "==", profile?.companyId || "comp_test_001")
+  // Initialize assigned mines default to current active mine
+  useEffect(() => {
+    if (selectedMineId && assignedMinesInput.length === 0) {
+      setAssignedMinesInput([selectedMineId]);
+    }
+  }, [selectedMineId]);
+
+  // Subscribe to mines collection
   useEffect(() => {
     if (!db || !activeCompanyId || !isAdmin) {
       setIsLoadingMines(false);
@@ -160,67 +166,53 @@ export default function AdministrationPage() {
     }
 
     setIsLoadingMines(true);
-    let unsubscribe: (() => void) | undefined;
+    const minesQuery = query(
+      collection(db, 'mines'),
+      where('companyId', '==', activeCompanyId)
+    );
 
-    try {
-      const minesQuery = query(
-        collection(db, 'mines'),
-        where('companyId', '==', activeCompanyId)
-      );
+    const unsubscribe = onSnapshot(
+      minesQuery,
+      (snapshot) => {
+        const loadedMines: MineDocument[] = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          const mshaMineId = String(
+            data.mshaMineId || data.mineId || data.id || docSnap.id
+          ).trim();
+          const mineName = String(
+            data.mineName || data.name || mshaMineId
+          ).trim();
+          const statusStr = String(data.status || 'Active');
+          const isActive =
+            data.active !== false && statusStr.toLowerCase() !== 'inactive';
 
-      unsubscribe = onSnapshot(
-        minesQuery,
-        (snapshot) => {
-          try {
-            const loadedMines: MineDocument[] = snapshot.docs.map((docSnap) => {
-              const data = docSnap.data();
-              const mshaMineId = String(
-                data.mshaMineId || data.mineId || data.id || docSnap.id
-              ).trim();
-              const mineName = String(
-                data.mineName || data.name || mshaMineId
-              ).trim();
-              const statusStr = String(data.status || 'Active');
-              const isActive =
-                data.active !== false && statusStr.toLowerCase() !== 'inactive';
+          return {
+            docId: docSnap.id,
+            mshaMineId,
+            mineName,
+            state: data.state || data.location || data.stateLocation || '—',
+            companyId: data.companyId || activeCompanyId,
+            status: statusStr,
+            active: isActive,
+            idType: data.idType === 'contractor' ? 'contractor' : 'mine',
+            createdAt: data.createdAt || '',
+          };
+        });
 
-              return {
-                docId: docSnap.id,
-                mshaMineId,
-                mineName,
-                state: data.state || data.location || data.stateLocation || '—',
-                companyId: data.companyId || activeCompanyId,
-                status: statusStr,
-                active: isActive,
-                idType: data.idType === 'contractor' ? 'contractor' : 'mine',
-                createdAt: data.createdAt || '',
-              };
-            });
+        loadedMines.sort((a, b) => a.mineName.localeCompare(b.mineName));
+        setFirestoreMines(loadedMines);
+        setIsLoadingMines(false);
+      },
+      (error) => {
+        console.error('Error querying mines collection:', error);
+        setIsLoadingMines(false);
+      }
+    );
 
-            loadedMines.sort((a, b) => a.mineName.localeCompare(b.mineName));
-            setFirestoreMines(loadedMines);
-          } catch (parseErr) {
-            console.error('Error parsing mines snapshot:', parseErr);
-          } finally {
-            setIsLoadingMines(false);
-          }
-        },
-        (error) => {
-          console.error('Error querying mines collection:', error);
-          setIsLoadingMines(false);
-        }
-      );
-    } catch (error) {
-      console.error('Error setting up mines listener:', error);
-      setIsLoadingMines(false);
-    }
-
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
+    return () => unsubscribe();
   }, [activeCompanyId, isAdmin]);
 
-  // Subscribe to collection("user_profiles") where("companyId", "==", profile?.companyId || "comp_test_001")
+  // Subscribe to user_profiles collection
   useEffect(() => {
     if (!db || !activeCompanyId || !isAdmin) {
       setIsLoadingUsers(false);
@@ -228,57 +220,43 @@ export default function AdministrationPage() {
     }
 
     setIsLoadingUsers(true);
-    let unsubscribe: (() => void) | undefined;
+    const usersQuery = query(
+      collection(db, 'user_profiles'),
+      where('companyId', '==', activeCompanyId)
+    );
 
-    try {
-      const usersQuery = query(
-        collection(db, 'user_profiles'),
-        where('companyId', '==', activeCompanyId)
-      );
+    const unsubscribe = onSnapshot(
+      usersQuery,
+      (snapshot) => {
+        const loadedUsers: CompanyUserRecord[] = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            docId: docSnap.id,
+            fullName: data.fullName || data.name || 'Unnamed User',
+            email: data.email || '—',
+            role: (data.role || 'examiner').toLowerCase(),
+            assignedMines: Array.isArray(data.assignedMines)
+              ? data.assignedMines
+              : selectedMineId ? [selectedMineId] : [],
+            companyId: data.companyId || activeCompanyId,
+            createdAt: data.createdAt || '',
+          };
+        });
 
-      unsubscribe = onSnapshot(
-        usersQuery,
-        (snapshot) => {
-          try {
-            const loadedUsers: CompanyUserRecord[] = snapshot.docs.map((docSnap) => {
-              const data = docSnap.data();
-              return {
-                docId: docSnap.id,
-                fullName: data.fullName || data.name || 'Unnamed User',
-                email: data.email || '—',
-                role: (data.role || 'examiner').toLowerCase(),
-                assignedMines: Array.isArray(data.assignedMines)
-                  ? data.assignedMines
-                  : ['13-00123'],
-                companyId: data.companyId || activeCompanyId,
-                createdAt: data.createdAt || '',
-              };
-            });
+        loadedUsers.sort((a, b) => a.fullName.localeCompare(b.fullName));
+        setCompanyUsers(loadedUsers);
+        setIsLoadingUsers(false);
+      },
+      (error) => {
+        console.error('Error querying user_profiles collection:', error);
+        setIsLoadingUsers(false);
+      }
+    );
 
-            loadedUsers.sort((a, b) => a.fullName.localeCompare(b.fullName));
-            setCompanyUsers(loadedUsers);
-          } catch (parseErr) {
-            console.error('Error parsing user_profiles snapshot:', parseErr);
-          } finally {
-            setIsLoadingUsers(false);
-          }
-        },
-        (error) => {
-          console.error('Error querying user_profiles collection:', error);
-          setIsLoadingUsers(false);
-        }
-      );
-    } catch (error) {
-      console.error('Error setting up user_profiles listener:', error);
-      setIsLoadingUsers(false);
-    }
+    return () => unsubscribe();
+  }, [activeCompanyId, isAdmin, selectedMineId]);
 
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, [activeCompanyId, isAdmin]);
-
-  // Display mines in table: if Firestore has documents, show them; otherwise show default fallback sites
+  // Displayed mines fallback calculation
   const displayedMines: MineDocument[] =
     firestoreMines.length > 0
       ? firestoreMines
@@ -293,8 +271,6 @@ export default function AdministrationPage() {
           isFallback: true,
         }));
 
-  // Subscription Plan Limit Calculations:
-  // Count existing mines in collection("mines") (or displayed active company mines) and existing users in collection("user_profiles")
   const existingMines = firestoreMines.length > 0 ? firestoreMines : displayedMines;
   const existingUsers = companyUsers;
 
@@ -303,13 +279,12 @@ export default function AdministrationPage() {
 
   const planSummary = `${companyPlan.label || companyPlan.planTier}: ${existingUsers.length}/${companyPlan.maxUsers} users, ${existingMines.length}/${companyPlan.maxMines} mines${companyPlan.examsOnly ? ' · exams-only trial' : ''}`;
 
-
   const disableAddMineButton =
     isSavingMine || (isMineLimitReached && !devBypassPlanLimits);
   const disableAddUserButton =
     isSavingUser || (isUserLimitReached && !devBypassPlanLimits);
 
-  // --- Card 1 Handlers: Add / Delete / Toggle Mine Site ---
+  // --- Handlers: Mine Sites ---
   const handleAddMineSite = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -336,6 +311,7 @@ export default function AdministrationPage() {
       });
       return;
     }
+
     if (idTypeInput === 'contractor' && (mshaMineId.length < 3 || mshaMineId.length > 5)) {
       toast({
         variant: 'destructive',
@@ -348,36 +324,16 @@ export default function AdministrationPage() {
     setIsSavingMine(true);
 
     try {
-      // If Firestore had no mines yet, seed existing default mines first so they remain available alongside the new site
-      if (firestoreMines.length === 0) {
-        for (const fallback of MINE_OPTIONS) {
-          if (fallback.id !== mshaMineId) {
-            try {
-              await addDoc(collection(db, 'mines'), {
-                mshaMineId: fallback.id,
-                mineName: fallback.name,
-                state: fallback.location || 'Primary',
-                companyId: activeCompanyId,
-                status: 'Active',
-                active: true,
-                createdAt: new Date().toISOString(),
-              });
-            } catch (seedErr) {
-              console.error('Error seeding default mine site:', seedErr);
-            }
-          }
-        }
-      }
-
       await addDoc(collection(db, 'mines'), {
         mshaMineId: idTypeInput === 'contractor' ? mshaMineId.toUpperCase() : mshaMineId,
         mineName,
-        state,
+        state: state || '—',
         idType: idTypeInput,
-        companyId: profile?.companyId || 'comp_test_001',
+        companyId: activeCompanyId,
         status: 'Active',
         active: true,
         createdAt: new Date().toISOString(),
+        serverCreatedAt: serverTimestamp(),
       });
 
       toast({
@@ -389,10 +345,10 @@ export default function AdministrationPage() {
       setMineNameInput('');
       setStateInput('');
     } catch (error: any) {
-      console.error('Error adding mine site to collection("mines"):', error);
+      console.error('Error adding mine site:', error);
       toast({
         variant: 'destructive',
-        title: `Failed to ${idTypeInput === 'contractor' ? 'add contractor ID' : 'add mine ID'}`,
+        title: 'Failed to Save',
         description: error?.message || 'Could not save mine site.',
       });
     } finally {
@@ -403,22 +359,9 @@ export default function AdministrationPage() {
   const handleDeleteMineSite = async (mine: MineDocument) => {
     try {
       if (mine.isFallback) {
-        // Persist the remaining fallback mines to Firestore so the deleted one is removed
-        const remaining = MINE_OPTIONS.filter((m) => m.id !== mine.mshaMineId);
-        for (const fallback of remaining) {
-          await addDoc(collection(db, 'mines'), {
-            mshaMineId: fallback.id,
-            mineName: fallback.name,
-            state: fallback.location || 'Primary',
-            companyId: activeCompanyId,
-            status: 'Active',
-            active: true,
-            createdAt: new Date().toISOString(),
-          });
-        }
         toast({
-          title: 'Mine Site Deleted',
-          description: `${mine.mineName} (${mine.mshaMineId}) was removed.`,
+          title: 'Default Mine',
+          description: 'Default placeholder sites cannot be deleted until customized in Firestore.',
         });
         return;
       }
@@ -429,7 +372,7 @@ export default function AdministrationPage() {
         description: `${mine.mineName} (${mine.mshaMineId}) has been deleted.`,
       });
     } catch (error: any) {
-      console.error('Error deleting mine site from collection("mines"):', error);
+      console.error('Error deleting mine site:', error);
       toast({
         variant: 'destructive',
         title: 'Delete Failed',
@@ -441,18 +384,17 @@ export default function AdministrationPage() {
   const handleToggleMineStatus = async (mine: MineDocument) => {
     try {
       if (mine.isFallback) {
-        for (const fallback of MINE_OPTIONS) {
-          const isTarget = fallback.id === mine.mshaMineId;
-          await addDoc(collection(db, 'mines'), {
-            mshaMineId: fallback.id,
-            mineName: fallback.name,
-            state: fallback.location || 'Primary',
-            companyId: activeCompanyId,
-            status: isTarget ? 'Inactive' : 'Active',
-            active: !isTarget,
-            createdAt: new Date().toISOString(),
-          });
-        }
+        // First-time toggle converts fallback to a real Firestore doc
+        await addDoc(collection(db, 'mines'), {
+          mshaMineId: mine.mshaMineId,
+          mineName: mine.mineName,
+          state: mine.state,
+          companyId: activeCompanyId,
+          status: 'Inactive',
+          active: false,
+          createdAt: new Date().toISOString(),
+          serverCreatedAt: serverTimestamp(),
+        });
         return;
       }
 
@@ -461,6 +403,7 @@ export default function AdministrationPage() {
         status: nextActive ? 'Active' : 'Inactive',
         active: nextActive,
       });
+
       toast({
         title: 'Mine Status Updated',
         description: `${mine.mineName} is now ${nextActive ? 'Active' : 'Inactive'}.`,
@@ -475,7 +418,7 @@ export default function AdministrationPage() {
     }
   };
 
-  // --- Card 2 Handlers: Add / Edit / Delete Team Member ---
+  // --- Handlers: User Provisioning ---
   const toggleAssignedMineInput = (mineId: string) => {
     setAssignedMinesInput((prev) =>
       prev.includes(mineId) ? prev.filter((id) => id !== mineId) : [...prev, mineId]
@@ -493,8 +436,7 @@ export default function AdministrationPage() {
     setUserFormError(null);
 
     if (isUserLimitReached && !devBypassPlanLimits) {
-      const limitMsg =
-        'User seat limit reached for your active plan. Upgrade to invite additional examiners.';
+      const limitMsg = 'User seat limit reached for your active plan.';
       setUserFormError(limitMsg);
       toast({
         variant: 'destructive',
@@ -509,46 +451,28 @@ export default function AdministrationPage() {
     const password = passwordInput;
     const role = roleInput;
     const selectedMines =
-      assignedMinesInput.length > 0 ? assignedMinesInput : ['13-00123'];
+      assignedMinesInput.length > 0 ? assignedMinesInput : (selectedMineId ? [selectedMineId] : []);
 
     if (!fullName || !email || !password) {
-      const missingMsg =
-        'Please enter Full Name, Email, and Temporary Password.';
+      const missingMsg = 'Please enter Full Name, Email, and Temporary Password.';
       setUserFormError(missingMsg);
-      toast({
-        variant: 'destructive',
-        title: 'Missing Fields',
-        description: missingMsg,
-      });
       return;
     }
 
     if (password.length < 6) {
       const lengthMsg = 'Temporary password must be at least 6 characters.';
       setUserFormError(lengthMsg);
-      toast({
-        variant: 'destructive',
-        title: 'Password Too Short',
-        description: lengthMsg,
-      });
       return;
     }
 
     setIsSavingUser(true);
 
     let secondaryApp: FirebaseApp | null = null;
+    const secondaryAppName = `ProvisionUser_${Date.now()}`;
 
     try {
-      // Secondary Firebase app so the admin session stays logged in
-      const existing = getApps().find((a) => a.name === 'Secondary');
-      if (existing) {
-        try {
-          await deleteApp(existing);
-        } catch {
-          /* ignore */
-        }
-      }
-      secondaryApp = initializeApp(firebaseConfig, 'Secondary');
+      // Create an isolated secondary app to avoid logging out the current admin session
+      secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
       const secondaryAuth = getAuth(secondaryApp);
 
       const userCredential = await createUserWithEmailAndPassword(
@@ -558,13 +482,15 @@ export default function AdministrationPage() {
       );
       const newUser = userCredential.user;
 
+      // Ensure companyId is strictly consistent with activeCompanyId
       await setDoc(doc(db, 'user_profiles', newUser.uid), {
         fullName,
         email,
         role,
         assignedMines: selectedMines,
-        companyId: profile?.companyId || 'comp_test_001',
+        companyId: activeCompanyId,
         createdAt: new Date().toISOString(),
+        serverCreatedAt: serverTimestamp(),
       });
 
       toast({
@@ -577,11 +503,11 @@ export default function AdministrationPage() {
       setPasswordInput('');
       setShowPassword(false);
       setRoleInput('examiner');
-      setAssignedMinesInput(['13-00123']);
+      setAssignedMinesInput(selectedMineId ? [selectedMineId] : []);
       setUserFormError(null);
       setIsAddUserModalOpen(false);
     } catch (error: any) {
-      console.error('Error creating user / user_profiles doc:', error);
+      console.error('Error creating user profile:', error);
       const message =
         error?.code === 'auth/email-already-in-use'
           ? 'That email is already registered.'
@@ -597,7 +523,7 @@ export default function AdministrationPage() {
         try {
           await deleteApp(secondaryApp);
         } catch (cleanupErr) {
-          console.error('Error cleaning up secondary Firebase app:', cleanupErr);
+          console.error('Error cleaning up secondary Firebase app instance:', cleanupErr);
         }
       }
       setIsSavingUser(false);
@@ -634,7 +560,7 @@ export default function AdministrationPage() {
       ? (userRecord.role.toLowerCase() as 'admin' | 'supervisor' | 'examiner')
       : 'examiner';
     setEditUserRole(normalizedRole);
-    setEditUserMines(userRecord.assignedMines || ['13-00123']);
+    setEditUserMines(userRecord.assignedMines || (selectedMineId ? [selectedMineId] : []));
   };
 
   const handleSaveUserModal = async (e: FormEvent) => {
@@ -653,7 +579,7 @@ export default function AdministrationPage() {
       });
       setEditingUser(null);
     } catch (error: any) {
-      console.error('Error updating user profile in user_profiles:', error);
+      console.error('Error updating user profile:', error);
       toast({
         variant: 'destructive',
         title: 'Update Failed',
@@ -703,7 +629,7 @@ export default function AdministrationPage() {
       return (
         <Badge
           variant="secondary"
-          className="bg-amber-500/20 text-amber-400 border-amber-500/40"
+          className="bg-amber-500/20 text-amber-500 border-amber-500/40"
         >
           supervisor
         </Badge>
@@ -765,7 +691,7 @@ export default function AdministrationPage() {
         </Badge>
       </div>
 
-      {/* Company Subscription Plan & Usage Overview Bar */}
+      {/* Plan Usage Overview Bar */}
       <Card className="border-primary/30 bg-card shadow-sm">
         <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-3">
@@ -774,7 +700,7 @@ export default function AdministrationPage() {
             </Badge>
             <Badge
               variant="secondary"
-              className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 text-xs capitalize"
+              className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40 text-xs capitalize"
             >
               Status: {companyPlan.subscriptionStatus}
             </Badge>
@@ -787,7 +713,6 @@ export default function AdministrationPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-            {/* Soft-Lock Protection: Admin / Guest Testing Override */}
             <div className="flex items-center space-x-2 rounded-md border bg-muted/30 px-3 py-1.5">
               <Unlock className="h-3.5 w-3.5 text-primary" />
               <Label
@@ -809,7 +734,7 @@ export default function AdministrationPage() {
         </CardContent>
       </Card>
 
-      {/* Card 1: "Manage Mine Sites" */}
+      {/* Card 1: Manage Mine Sites */}
       <Card className="min-w-0 max-w-full overflow-hidden">
         <CardHeader>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -832,7 +757,6 @@ export default function AdministrationPage() {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Add Mine Form */}
           <form onSubmit={handleAddMineSite} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-2">
@@ -903,7 +827,6 @@ export default function AdministrationPage() {
             </div>
           </form>
 
-          {/* Existing Mines Table */}
           <div className="min-w-0 max-w-full overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
@@ -951,7 +874,7 @@ export default function AdministrationPage() {
                         <TableCell>
                           <Badge
                             variant={mine.active ? 'secondary' : 'outline'}
-                            className={mine.active ? 'bg-emerald-500/20 text-emerald-400' : ''}
+                            className={mine.active ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : ''}
                           >
                             {mine.status}
                           </Badge>
@@ -1006,7 +929,7 @@ export default function AdministrationPage() {
 
       <Separator />
 
-      {/* Card 2: "Company User Roster" */}
+      {/* Card 2: Company User Roster */}
       <Card className="min-w-0 max-w-full overflow-hidden">
         <CardHeader>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1036,25 +959,24 @@ export default function AdministrationPage() {
                 }}
               >
                 <UserPlus className="mr-1.5 h-4 w-4" />
-                Add Team Member / Create User
+                Add Team Member
               </Button>
             </div>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Plan Limit Banner for User Roster */}
           {isUserLimitReached && (
             <div className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-2.5 text-amber-400">
+              <div className="flex items-start gap-2.5 text-amber-500">
                 <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
                   <p className="text-sm font-semibold">
-                    User seat limit reached for your active plan. Upgrade to invite additional examiners.
+                    User seat limit reached for your active plan.
                   </p>
                   {devBypassPlanLimits && (
                     <p className="text-xs text-muted-foreground">
-                      Admin / Dev Testing Override is enabled — adding team members is unlocked for testing.
+                      Admin / Dev Testing Override is enabled — adding team members is unlocked.
                     </p>
                   )}
                 </div>
@@ -1068,118 +990,7 @@ export default function AdministrationPage() {
             </div>
           )}
 
-          {/* Company Users List — responsive */}
-          {/* Mobile: stacked cards */}
-          <div className="md:hidden space-y-3">
-            {isLoadingUsers ? (
-              <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
-                Loading company user roster...
-              </div>
-            ) : companyUsers.length > 0 ? (
-              companyUsers.map((u) => (
-                <div
-                  key={u.docId}
-                  className="rounded-lg border bg-card p-3 space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium truncate">{u.fullName}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {u.email}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {renderRoleBadge(u.role)}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Role
-                    </div>
-                    <select
-                      aria-label={`Change role for ${u.fullName}`}
-                      value={
-                        ['admin', 'supervisor', 'examiner'].includes(
-                          u.role.toLowerCase()
-                        )
-                          ? u.role.toLowerCase()
-                          : 'examiner'
-                      }
-                      onChange={(e) =>
-                        handleInlineRoleUpdate(u, e.target.value)
-                      }
-                      className="h-8 w-full rounded border border-input bg-background px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      <option value="examiner">examiner</option>
-                      <option value="supervisor">supervisor</option>
-                      <option value="admin">admin</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Assigned Mines
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {u.assignedMines && u.assignedMines.length > 0 ? (
-                        u.assignedMines.map((mineId) => {
-                          const matched = mineOptions.find(
-                            (m) => m.id === mineId
-                          );
-                          return (
-                            <Badge
-                              key={mineId}
-                              variant="secondary"
-                              className="font-mono text-[11px]"
-                            >
-                              {matched ? `${matched.name} (${mineId})` : mineId}
-                            </Badge>
-                          );
-                        })
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          13-00123
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] text-muted-foreground">
-                      {formatDateAdded(u.createdAt)}
-                    </span>
-                    <div className="flex gap-1.5">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2.5"
-                        onClick={() => openEditUserModal(u)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2.5 text-destructive hover:text-destructive"
-                        onClick={() => handleDeleteUser(u)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
-                No team members found in company roster. Use the form above to add a team member.
-              </div>
-            )}
-          </div>
-
-          {/* Desktop / tablet: original table */}
+          {/* Desktop Table View */}
           <div className="hidden md:block min-w-0 max-w-full overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
@@ -1203,24 +1014,18 @@ export default function AdministrationPage() {
                   companyUsers.map((u) => (
                     <TableRow key={u.docId}>
                       <TableCell className="font-medium">{u.fullName}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {u.email}
-                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {renderRoleBadge(u.role)}
                           <select
                             aria-label={`Change role for ${u.fullName}`}
                             value={
-                              ['admin', 'supervisor', 'examiner'].includes(
-                                u.role.toLowerCase()
-                              )
+                              ['admin', 'supervisor', 'examiner'].includes(u.role.toLowerCase())
                                 ? u.role.toLowerCase()
                                 : 'examiner'
                             }
-                            onChange={(e) =>
-                              handleInlineRoleUpdate(u, e.target.value)
-                            }
+                            onChange={(e) => handleInlineRoleUpdate(u, e.target.value)}
                             className="h-7 rounded border border-input bg-background px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           >
                             <option value="examiner">examiner</option>
@@ -1233,9 +1038,7 @@ export default function AdministrationPage() {
                         <div className="flex flex-wrap gap-1">
                           {u.assignedMines && u.assignedMines.length > 0 ? (
                             u.assignedMines.map((mineId) => {
-                              const matched = mineOptions.find(
-                                (m) => m.id === mineId
-                              );
+                              const matched = mineOptions.find((m) => m.id === mineId);
                               return (
                                 <Badge
                                   key={mineId}
@@ -1247,9 +1050,7 @@ export default function AdministrationPage() {
                               );
                             })
                           ) : (
-                            <span className="text-xs text-muted-foreground">
-                              13-00123
-                            </span>
+                            <span className="text-xs text-muted-foreground">None</span>
                           )}
                         </div>
                       </TableCell>
@@ -1283,266 +1084,109 @@ export default function AdministrationPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No team members found in company roster. Use the form above to add a team member.
+                      No team members found in company roster.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </div>
+
+          {/* Mobile Card List View */}
+          <div className="md:hidden space-y-3">
+            {isLoadingUsers ? (
+              <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
+                Loading company user roster...
+              </div>
+            ) : companyUsers.length > 0 ? (
+              companyUsers.map((u) => (
+                <div key={u.docId} className="rounded-lg border bg-card p-3 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{u.fullName}</div>
+                      <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                    </div>
+                    <div className="shrink-0">{renderRoleBadge(u.role)}</div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Role
+                    </div>
+                    <select
+                      aria-label={`Change role for ${u.fullName}`}
+                      value={
+                        ['admin', 'supervisor', 'examiner'].includes(u.role.toLowerCase())
+                          ? u.role.toLowerCase()
+                          : 'examiner'
+                      }
+                      onChange={(e) => handleInlineRoleUpdate(u, e.target.value)}
+                      className="h-8 w-full rounded border border-input bg-background px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="examiner">examiner</option>
+                      <option value="supervisor">supervisor</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Assigned Mines
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {u.assignedMines && u.assignedMines.length > 0 ? (
+                        u.assignedMines.map((mineId) => {
+                          const matched = mineOptions.find((m) => m.id === mineId);
+                          return (
+                            <Badge
+                              key={mineId}
+                              variant="secondary"
+                              className="font-mono text-[11px]"
+                            >
+                              {matched ? `${matched.name} (${mineId})` : mineId}
+                            </Badge>
+                          );
+                        })
+                      ) : (
+                        <span className="text-xs text-muted-foreground">None</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      {formatDateAdded(u.createdAt)}
+                    </span>
+                    <div className="flex gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2.5"
+                        onClick={() => openEditUserModal(u)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2.5 text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteUser(u)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
+                No team members found in company roster.
+              </div>
+            )}
+          </div>
         </CardContent>
 
         <CardFooter>
-          <div className="text-xs text-muted-foreground">
-            Showing <strong>{companyUsers.length}</strong> of{' '}
-            <strong>{companyPlan.maxUsers}</strong> allowed team{' '}
-            {companyUsers.length === 1 ? 'member' : 'members'} in company{' '}
-            <span className="font-mono">{activeCompanyId}</span>
-          </div>
-        </CardFooter>
-      </Card>
-
-      {/* Add Team Member / Create User Modal */}
-      <Dialog
-        open={isAddUserModalOpen}
-        onOpenChange={(open) => {
-          setIsAddUserModalOpen(open);
-          if (!open) setUserFormError(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-[520px]">
-          <DialogHeader>
-            <DialogTitle>Add Team Member / Create User</DialogTitle>
-            <DialogDescription>
-              Provision a new user account with a temporary password and assign their role and MSHA mine sites. Your active admin session will remain logged in.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleAddUser} className="space-y-4 py-2">
-            {userFormError && (
-              <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>{userFormError}</span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="modal-add-fullname">Full Name</Label>
-              <Input
-                id="modal-add-fullname"
-                placeholder="Enter full name"
-                value={fullNameInput}
-                onChange={(e) => {
-                  setFullNameInput(e.target.value);
-                  if (userFormError) setUserFormError(null);
-                }}
-                disabled={disableAddUserButton}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="modal-add-email">Email</Label>
-              <Input
-                id="modal-add-email"
-                type="email"
-                placeholder="name@company.com"
-                value={emailInput}
-                onChange={(e) => {
-                  setEmailInput(e.target.value);
-                  if (userFormError) setUserFormError(null);
-                }}
-                disabled={disableAddUserButton}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="modal-add-password">Temporary Password</Label>
-              <div className="relative">
-                <Input
-                  id="modal-add-password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter temporary password (min 6 chars)"
-                  value={passwordInput}
-                  onChange={(e) => {
-                    setPasswordInput(e.target.value);
-                    if (userFormError) setUserFormError(null);
-                  }}
-                  disabled={disableAddUserButton}
-                  className="pr-10"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  disabled={disableAddUserButton}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:opacity-50"
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="modal-add-role">Role</Label>
-              <select
-                id="modal-add-role"
-                value={roleInput}
-                onChange={(e) =>
-                  setRoleInput(
-                    e.target.value as 'examiner' | 'supervisor' | 'admin'
-                  )
-                }
-                disabled={disableAddUserButton}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="examiner">examiner</option>
-                <option value="supervisor">supervisor</option>
-                <option value="admin">admin</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Assigned MSHA Mine Sites</Label>
-              <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
-                {mineOptions.map((mine) => (
-                  <div key={mine.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`add-mine-${mine.id}`}
-                      checked={assignedMinesInput.includes(mine.id)}
-                      onCheckedChange={() => toggleAssignedMineInput(mine.id)}
-                      disabled={disableAddUserButton}
-                    />
-                    <Label
-                      htmlFor={`add-mine-${mine.id}`}
-                      className="text-sm font-normal cursor-pointer"
-                    >
-                      {mine.name}{' '}
-                      <span className="font-mono text-xs text-muted-foreground">
-                        ({mine.id})
-                      </span>
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsAddUserModalOpen(false)}
-                disabled={isSavingUser}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={disableAddUserButton}>
-                {isSavingUser ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Add Team Member
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit User Modal */}
-      <Dialog
-        open={!!editingUser}
-        onOpenChange={(open) => {
-          if (!open) setEditingUser(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>Edit Team Member</DialogTitle>
-            <DialogDescription>
-              Update role and assigned mine sites for {editingUser?.fullName}.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSaveUserModal} className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <select
-                value={editUserRole}
-                onChange={(e) =>
-                  setEditUserRole(
-                    e.target.value as 'examiner' | 'supervisor' | 'admin'
-                  )
-                }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="examiner">examiner</option>
-                <option value="supervisor">supervisor</option>
-                <option value="admin">admin</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Assigned MSHA Mine Sites</Label>
-              <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
-                {mineOptions.map((mine) => (
-                  <div key={mine.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`edit-mine-${mine.id}`}
-                      checked={editUserMines.includes(mine.id)}
-                      onCheckedChange={() => toggleEditUserMine(mine.id)}
-                    />
-                    <Label
-                      htmlFor={`edit-mine-${mine.id}`}
-                      className="text-sm font-normal cursor-pointer"
-                    >
-                      {mine.name}{' '}
-                      <span className="font-mono text-xs text-muted-foreground">
-                        ({mine.id})
-                      </span>
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setEditingUser(null)}
-                disabled={isUpdatingUser}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isUpdatingUser}>
-                {isUpdatingUser ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
+          <div className="text-
