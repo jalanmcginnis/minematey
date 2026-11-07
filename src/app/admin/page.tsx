@@ -524,53 +524,54 @@ export default function AdministrationPage() {
     }
 
     if (password.length < 6) {
-      const shortPassMsg = 'Password must be at least 6 characters.';
-      setUserFormError(shortPassMsg);
+      const lengthMsg = 'Temporary password must be at least 6 characters.';
+      setUserFormError(lengthMsg);
       toast({
         variant: 'destructive',
-        title: 'Invalid Password',
-        description: shortPassMsg,
+        title: 'Password Too Short',
+        description: lengthMsg,
       });
       return;
     }
 
     setIsSavingUser(true);
 
-    const secondaryAppName = `provisionUser-${Date.now()}`;
     let secondaryApp: FirebaseApp | null = null;
 
     try {
-      secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+      // Secondary Firebase app so the admin session stays logged in
+      const existing = getApps().find((a) => a.name === 'Secondary');
+      if (existing) {
+        try {
+          await deleteApp(existing);
+        } catch {
+          /* ignore */
+        }
+      }
+      secondaryApp = initializeApp(firebaseConfig, 'Secondary');
       const secondaryAuth = getAuth(secondaryApp);
 
-      // 1. Create the Auth account in the background without affecting the active admin session
       const userCredential = await createUserWithEmailAndPassword(
         secondaryAuth,
         email,
         password
       );
-      const newUid = userCredential.user.uid;
+      const newUser = userCredential.user;
 
-      // 2. Write the profile to Firestore using the primary db instance and real UID
-      await setDoc(doc(db, 'user_profiles', newUid), {
-        email: email,
-        fullName: fullName,
-        role: role,
-        companyId: profile?.companyId || 'comp_test_001',
+      await setDoc(doc(db, 'user_profiles', newUser.uid), {
+        fullName,
+        email,
+        role,
         assignedMines: selectedMines,
+        companyId: profile?.companyId || 'comp_test_001',
         createdAt: new Date().toISOString(),
       });
 
-      // 3. Clean up the secondary app instance
-      await deleteApp(secondaryApp);
-      secondaryApp = null;
-
       toast({
-        title: 'Team Member Provisioned',
+        title: 'Team Member Created',
         description: `${fullName} (${role}) has been created and added to the company roster.`,
       });
 
-      // Reset form and close modal if open
       setFullNameInput('');
       setEmailInput('');
       setPasswordInput('');
@@ -580,59 +581,46 @@ export default function AdministrationPage() {
       setUserFormError(null);
       setIsAddUserModalOpen(false);
     } catch (error: any) {
-      console.error('Failed to provision user:', error);
-
+      console.error('Error creating user / user_profiles doc:', error);
+      const message =
+        error?.code === 'auth/email-already-in-use'
+          ? 'That email is already registered.'
+          : error?.message || 'Could not create the team member.';
+      setUserFormError(message);
+      toast({
+        variant: 'destructive',
+        title: 'Create User Failed',
+        description: message,
+      });
+    } finally {
       if (secondaryApp) {
         try {
-          if (getApps().some((a) => a.name === secondaryAppName)) {
-            await deleteApp(secondaryApp);
-          }
+          await deleteApp(secondaryApp);
         } catch (cleanupErr) {
           console.error('Error cleaning up secondary Firebase app:', cleanupErr);
         }
       }
-
-      let friendlyMessage =
-        error?.message || 'Could not provision user account.';
-      if (error?.code === 'auth/email-already-in-use') {
-        friendlyMessage = 'An account with this email already exists.';
-      } else if (
-        error?.code === 'auth/weak-password' ||
-        password.length < 6
-      ) {
-        friendlyMessage = 'Password must be at least 6 characters.';
-      }
-
-      setUserFormError(friendlyMessage);
-      toast({
-        variant: 'destructive',
-        title: 'Failed to Add Team Member',
-        description: friendlyMessage,
-      });
-    } finally {
       setIsSavingUser(false);
     }
   };
 
-  const handleAddTeamMember = handleAddUser;
-
   const handleInlineRoleUpdate = async (
     userRecord: CompanyUserRecord,
-    nextRole: string
+    newRole: string
   ) => {
     try {
       await updateDoc(doc(db, 'user_profiles', userRecord.docId), {
-        role: nextRole,
+        role: newRole,
       });
       toast({
         title: 'Role Updated',
-        description: `${userRecord.fullName}'s role was updated to ${nextRole}.`,
+        description: `${userRecord.fullName} is now ${newRole}.`,
       });
     } catch (error: any) {
-      console.error('Error updating role in user_profiles:', error);
+      console.error('Error updating user role:', error);
       toast({
         variant: 'destructive',
-        title: 'Role Update Failed',
+        title: 'Update Failed',
         description: error?.message || 'Could not update role.',
       });
     }
@@ -669,7 +657,7 @@ export default function AdministrationPage() {
       toast({
         variant: 'destructive',
         title: 'Update Failed',
-        description: error?.message || 'Could not update team member.',
+        description: error?.message || 'Could not save changes.',
       });
     } finally {
       setIsUpdatingUser(false);
@@ -684,7 +672,7 @@ export default function AdministrationPage() {
         description: `${userRecord.fullName} has been removed from the roster.`,
       });
     } catch (error: any) {
-      console.error('Error deleting user from user_profiles:', error);
+      console.error('Error deleting user profile:', error);
       toast({
         variant: 'destructive',
         title: 'Delete Failed',
@@ -693,87 +681,76 @@ export default function AdministrationPage() {
     }
   };
 
+  const formatDateAdded = (iso?: string) => {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString();
+    } catch {
+      return '—';
+    }
+  };
+
   const renderRoleBadge = (role: string) => {
-    const normalized = role.toLowerCase();
-    if (normalized === 'admin') {
+    const r = role.toLowerCase();
+    if (r === 'admin') {
       return (
-        <Badge className="bg-primary/20 text-primary border-primary/40 capitalize">
-          Admin
+        <Badge className="bg-primary/20 text-primary border-primary/40">
+          admin
         </Badge>
       );
     }
-    if (normalized === 'supervisor') {
+    if (r === 'supervisor') {
       return (
         <Badge
           variant="secondary"
-          className="bg-blue-500/20 text-blue-400 border-blue-500/40 capitalize"
+          className="bg-amber-500/20 text-amber-400 border-amber-500/40"
         >
-          Supervisor
+          supervisor
         </Badge>
       );
     }
     return (
       <Badge variant="outline" className="capitalize">
-        Examiner
+        {r || 'examiner'}
       </Badge>
     );
   };
 
-  const formatDateAdded = (dateStr?: string) => {
-    if (!dateStr) return '—';
-    const parsed = new Date(dateStr);
-    return isNaN(parsed.getTime()) ? dateStr : parsed.toLocaleDateString();
-  };
-
   if (authLoading) {
     return (
-      <div className="flex h-64 w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <Card className="border-destructive/50 max-w-xl mx-auto mt-10">
-        <CardHeader>
-          <div className="flex items-center gap-2 text-destructive">
-            <ShieldAlert className="h-6 w-6" />
-            <CardTitle>Administrator Access Required</CardTitle>
-          </div>
-          <CardDescription>
-            This Administration page is restricted to users with the <strong>Admin</strong> role or Guest Supervisors.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Your current role is <strong className="capitalize">{profile?.role || 'Examiner'}</strong>.
-          </p>
-        </CardContent>
-        <CardFooter>
-          <Button asChild variant="outline">
-            <Link href="/dashboard">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Dashboard
-            </Link>
-          </Button>
-        </CardFooter>
-      </Card>
+      <div className="mx-auto flex max-w-lg flex-col items-center gap-4 py-16 text-center">
+        <ShieldAlert className="h-10 w-10 text-destructive" />
+        <h1 className="text-xl font-semibold">Access Restricted</h1>
+        <p className="text-sm text-muted-foreground">
+          This Administration page is restricted to users with the <strong>Admin</strong> role or Guest Supervisors.
+        </p>
+        <Button asChild variant="outline">
+          <Link href="/dashboard">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Dashboard
+          </Link>
+        </Button>
+      </div>
     );
   }
 
   return (
-    <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
-      {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-2 sm:px-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Building2 className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">
-              Company Admin Settings
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight">Administration</h1>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Manage MSHA mine sites, user roster, and subscription limits for{' '}
             <span className="font-mono text-xs font-semibold text-foreground">
               {activeCompanyId}
@@ -825,13 +802,9 @@ export default function AdministrationPage() {
                 onCheckedChange={setDevBypassPlanLimits}
               />
             </div>
-
-            <Button asChild size="sm" variant="outline">
-              <Link href="/dashboard/upgrade">
-                <Sparkles className="mr-1.5 h-3.5 w-3.5 text-primary" />
-                Upgrade Plan
-              </Link>
-            </Button>
+            <div className="text-xs text-muted-foreground">
+              {planSummary}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -843,151 +816,95 @@ export default function AdministrationPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Mountain className="h-5 w-5 text-primary" />
-                <CardTitle>Manage IDs</CardTitle>
+                <CardTitle>Manage Mine Sites</CardTitle>
               </div>
               <CardDescription>
-                Add a mine ID or a contractor ID. Both appear in the same list and in the dashboard selector.
+                Add, activate, or remove MSHA mine sites and contractor IDs for your company.
               </CardDescription>
             </div>
             <Badge
               variant={isMineLimitReached ? 'destructive' : 'outline'}
               className="w-fit font-mono text-xs"
             >
-              {planSummary}
+              {existingMines.length} / {companyPlan.maxMines} Mine Sites Used
             </Badge>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Plan Limit Banner for Mine Sites */}
-          {isMineLimitReached && (
-            <div className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-2.5 text-amber-400">
-                <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="text-sm font-semibold">
-                    {`Mine site limit reached for your active plan (${companyPlan.planTier}). Upgrade to add more locations.`}
-                  </p>
-                  {devBypassPlanLimits && (
-                    <p className="text-xs text-muted-foreground">
-                      Admin / Dev Testing Override is enabled — adding locations is unlocked for testing.
-                    </p>
-                  )}
-                </div>
-              </div>
-              <Button asChild size="sm" variant="secondary" className="shrink-0">
-                <Link href="/dashboard/upgrade">
-                  <Sparkles className="mr-1.5 h-3.5 w-3.5 text-primary" />
-                  Upgrade Plan
-                </Link>
-              </Button>
-            </div>
-          )}
-
-          {/* {idTypeInput === 'contractor' ? 'Add Contractor ID' : 'Add Mine ID'} Form */}
-          <form
-            onSubmit={handleAddMineSite}
-            className="rounded-lg border bg-muted/30 p-4 space-y-4"
-          >
-            <div className="grid gap-4 sm:grid-cols-4">
+          {/* Add Mine Form */}
+          <form onSubmit={handleAddMineSite} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-2">
-                <Label htmlFor="id-type-input">Type</Label>
+                <Label>ID Type</Label>
                 <select
-                  id="id-type-input"
                   value={idTypeInput}
-                  onChange={(e) => setIdTypeInput(e.target.value as 'mine' | 'contractor')}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  onChange={(e) =>
+                    setIdTypeInput(e.target.value as 'mine' | 'contractor')
+                  }
+                  disabled={disableAddMineButton}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <option value="mine">Mine ID</option>
-                  <option value="contractor">Contractor ID</option>
+                  <option value="mine">Mine</option>
+                  <option value="contractor">Contractor</option>
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="msha-mine-id-input">{idTypeInput === 'contractor' ? 'Contractor ID' : 'MSHA Mine ID'}</Label>
+                <Label htmlFor="msha-id">
+                  {idTypeInput === 'contractor' ? 'Contractor ID' : 'MSHA Mine ID'}
+                </Label>
                 <Input
-                  id="msha-mine-id-input"
-                  type="text"
-                  placeholder={idTypeInput === 'contractor' ? 'AB12' : 'e.g., 13-00789'}
+                  id="msha-id"
+                  placeholder={idTypeInput === 'contractor' ? 'e.g. ABC' : 'e.g. 13-00123'}
                   value={mshaMineIdInput}
                   onChange={(e) => setMshaMineIdInput(e.target.value)}
                   disabled={disableAddMineButton}
-                  required
                 />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="mine-name-input">Mine Name</Label>
+                <Label htmlFor="mine-name">
+                  {idTypeInput === 'contractor' ? 'Contractor Name' : 'Mine Name'}
+                </Label>
                 <Input
-                  id="mine-name-input"
-                  type="text"
-                  placeholder="e.g., East Plant"
+                  id="mine-name"
+                  placeholder="Site name"
                   value={mineNameInput}
                   onChange={(e) => setMineNameInput(e.target.value)}
                   disabled={disableAddMineButton}
-                  required
                 />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="mine-state-input">State</Label>
+                <Label htmlFor="state">
+                  {idTypeInput === 'contractor' ? 'State (optional)' : 'State'}
+                </Label>
                 <Input
-                  id="mine-state-input"
-                  type="text"
-                  placeholder="e.g., IA"
+                  id="state"
+                  placeholder="e.g. IA"
                   value={stateInput}
                   onChange={(e) => setStateInput(e.target.value)}
                   disabled={disableAddMineButton}
-                  required
                 />
               </div>
             </div>
-
-            <Button type="submit" disabled={disableAddMineButton}>
-              {isSavingMine ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding Mine Site...
-                </>
-              ) : (
-                <>
-                  <Plus className="mr-2 h-4 w-4" />
-                  {idTypeInput === 'contractor' ? 'Add Contractor ID' : 'Add Mine ID'}
-                </>
-              )}
-            </Button>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={disableAddMineButton}>
+                {isSavingMine ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add {idTypeInput === 'contractor' ? 'Contractor ID' : 'Mine Site'}
+                  </>
+                )}
+              </Button>
+            </div>
           </form>
 
           {/* Existing Mines Table */}
-          <div className="space-y-2 md:hidden">
-            {isLoadingMines ? (
-              <p className="py-4 text-center text-sm">Loading IDs...</p>
-            ) : displayedMines.length > 0 ? (
-              displayedMines.map((mine) => (
-                <div key={mine.docId} className="rounded-md border p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground">{mine.idType === 'contractor' ? 'Contractor' : 'Mine'}</p>
-                      <p className="truncate font-mono text-sm font-semibold">{mine.mshaMineId}</p>
-                      <p className="truncate text-sm">{mine.mineName}</p>
-                      <p className="text-xs text-muted-foreground">{mine.state || '—'} · {mine.active ? 'Active' : 'Inactive'}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {mine.active && selectedMineId !== mine.mshaMineId && (
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedMineId(mine.mshaMineId)}>Select</Button>
-                    )}
-                    <Button type="button" variant="outline" size="sm" onClick={() => handleToggleMineStatus(mine)}>
-                      {mine.active ? 'Deactivate' : 'Activate'}
-                    </Button>
-                    <Button type="button" variant="destructive" size="sm" onClick={() => handleDeleteMineSite(mine)}>Delete</Button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="py-4 text-center text-sm text-muted-foreground">No IDs yet.</p>
-            )}
-          </div>
-          <div className="hidden min-w-0 max-w-full overflow-x-auto rounded-md border md:block">
+          <div className="min-w-0 max-w-full overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1003,7 +920,7 @@ export default function AdministrationPage() {
                 {isLoadingMines ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-6">
-                      Loading company mine sites...
+                      Loading mine sites...
                     </TableCell>
                   </TableRow>
                 ) : displayedMines.length > 0 ? (
@@ -1017,34 +934,27 @@ export default function AdministrationPage() {
                         </TableCell>
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
-                            <span>{mine.mineName}</span>
+                            {mine.mineName}
                             {isCurrentlySelected && (
                               <Badge variant="secondary" className="text-[10px]">
-                                Active in Header
+                                Active Site
                               </Badge>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                            <MapPin className="h-3.5 w-3.5" />
+                          <div className="flex items-center gap-1 text-sm">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                             {mine.state}
-                          </span>
+                          </div>
                         </TableCell>
                         <TableCell>
-                          {mine.active ? (
-                            <Badge
-                              variant="secondary"
-                              className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                            >
-                              <CheckCircle2 className="mr-1 h-3 w-3" />
-                              {mine.status || 'Active'}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-muted-foreground">
-                              Inactive
-                            </Badge>
-                          )}
+                          <Badge
+                            variant={mine.active ? 'secondary' : 'outline'}
+                            className={mine.active ? 'bg-emerald-500/20 text-emerald-400' : ''}
+                          >
+                            {mine.status}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -1069,12 +979,12 @@ export default function AdministrationPage() {
                             </Button>
                             <Button
                               type="button"
-                              variant="destructive"
+                              variant="ghost"
                               size="sm"
+                              className="text-destructive hover:text-destructive"
                               onClick={() => handleDeleteMineSite(mine)}
                             >
-                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                              Delete
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </TableCell>
@@ -1084,7 +994,7 @@ export default function AdministrationPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-6">
-                      No mine sites found. Add a mine site above.
+                      No mine sites found.
                     </TableCell>
                   </TableRow>
                 )}
@@ -1149,157 +1059,128 @@ export default function AdministrationPage() {
                   )}
                 </div>
               </div>
-              <Button asChild size="sm" variant="secondary" className="shrink-0">
-                <Link href="/dashboard/upgrade">
-                  <Sparkles className="mr-1.5 h-3.5 w-3.5 text-primary" />
+              <Button asChild size="sm" variant="outline">
+                <Link href="/dashboard/billing">
+                  <Sparkles className="mr-1.5 h-4 w-4" />
                   Upgrade Plan
                 </Link>
               </Button>
             </div>
           )}
 
-          {/* Add Team Member Form */}
-          <form
-            onSubmit={handleAddUser}
-            className="rounded-lg border bg-muted/30 p-4 space-y-4"
-          >
-            {userFormError && (
-              <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>{userFormError}</span>
+          {/* Company Users List — responsive */}
+          {/* Mobile: stacked cards */}
+          <div className="md:hidden space-y-3">
+            {isLoadingUsers ? (
+              <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
+                Loading company user roster...
+              </div>
+            ) : companyUsers.length > 0 ? (
+              companyUsers.map((u) => (
+                <div
+                  key={u.docId}
+                  className="rounded-lg border bg-card p-3 space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{u.fullName}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {u.email}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {renderRoleBadge(u.role)}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Role
+                    </div>
+                    <select
+                      aria-label={`Change role for ${u.fullName}`}
+                      value={{
+                        ['admin', 'supervisor', 'examiner'].includes(
+                          u.role.toLowerCase()
+                        )
+                          ? u.role.toLowerCase()
+                          : 'examiner'
+                      }}
+                      onChange={(e) =>
+                        handleInlineRoleUpdate(u, e.target.value)
+                      }
+                      className="h-8 w-full rounded border border-input bg-background px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="examiner">examiner</option>
+                      <option value="supervisor">supervisor</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Assigned Mines
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {u.assignedMines && u.assignedMines.length > 0 ? (
+                        u.assignedMines.map((mineId) => {
+                          const matched = mineOptions.find(
+                            (m) => m.id === mineId
+                          );
+                          return (
+                            <Badge
+                              key={mineId}
+                              variant="secondary"
+                              className="font-mono text-[11px]"
+                            >
+                              {matched ? `${matched.name} (${mineId})` : mineId}
+                            </Badge>
+                          );
+                        })
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          13-00123
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      {formatDateAdded(u.createdAt)}
+                    </span>
+                    <div className="flex gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2.5"
+                        onClick={() => openEditUserModal(u)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2.5 text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteUser(u)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
+                No team members found in company roster. Use the form above to add a team member.
               </div>
             )}
+          </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2">
-                <Label htmlFor="roster-fullname-input">Full Name</Label>
-                <Input
-                  id="roster-fullname-input"
-                  type="text"
-                  placeholder="e.g., Sarah Jenkins"
-                  value={fullNameInput}
-                  onChange={(e) => {
-                    setFullNameInput(e.target.value);
-                    if (userFormError) setUserFormError(null);
-                  }}
-                  disabled={disableAddUserButton}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="roster-email-input">Email</Label>
-                <Input
-                  id="roster-email-input"
-                  type="email"
-                  placeholder="e.g., sarah.jenkins@company.com"
-                  value={emailInput}
-                  onChange={(e) => {
-                    setEmailInput(e.target.value);
-                    if (userFormError) setUserFormError(null);
-                  }}
-                  disabled={disableAddUserButton}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="roster-password-input">Temporary Password</Label>
-                <div className="relative">
-                  <Input
-                    id="roster-password-input"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter temporary password (min 6 chars)"
-                    value={passwordInput}
-                    onChange={(e) => {
-                      setPasswordInput(e.target.value);
-                      if (userFormError) setUserFormError(null);
-                    }}
-                    disabled={disableAddUserButton}
-                    className="pr-10"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    disabled={disableAddUserButton}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:opacity-50"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="roster-role-select">Role</Label>
-                <select
-                  id="roster-role-select"
-                  value={roleInput}
-                  onChange={(e) =>
-                    setRoleInput(
-                      e.target.value as 'examiner' | 'supervisor' | 'admin'
-                    )
-                  }
-                  disabled={disableAddUserButton}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="examiner">examiner</option>
-                  <option value="supervisor">supervisor</option>
-                  <option value="admin">admin</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Assigned Mines Checkboxes */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Assigned MSHA Mine Sites
-              </Label>
-              <div className="flex flex-wrap gap-4 rounded-md border bg-background p-3">
-                {mineOptions.map((mine) => {
-                  const checked = assignedMinesInput.includes(mine.id);
-                  return (
-                    <div key={mine.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`roster-mine-check-${mine.id}`}
-                        checked={checked}
-                        disabled={disableAddUserButton}
-                        onCheckedChange={() => toggleAssignedMineInput(mine.id)}
-                      />
-                      <Label
-                        htmlFor={`roster-mine-check-${mine.id}`}
-                        className="text-xs sm:text-sm font-normal cursor-pointer"
-                      >
-                        {mine.label}
-                      </Label>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <Button type="submit" disabled={disableAddUserButton}>
-              {isSavingUser ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding Team Member...
-                </>
-              ) : (
-                <>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Add Team Member
-                </>
-              )}
-            </Button>
-          </form>
-
-          {/* Company Users Table */}
-          <div className="min-w-0 max-w-full overflow-x-auto rounded-md border">
+          {/* Desktop / tablet: original table */}
+          <div className="hidden md:block min-w-0 max-w-full overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1307,7 +1188,7 @@ export default function AdministrationPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Assigned Mines</TableHead>
-                  <TableHead className="hidden md:table-cell">Date Added</TableHead>
+                  <TableHead>Date Added</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1330,13 +1211,13 @@ export default function AdministrationPage() {
                           {renderRoleBadge(u.role)}
                           <select
                             aria-label={`Change role for ${u.fullName}`}
-                            value={
+                            value={{
                               ['admin', 'supervisor', 'examiner'].includes(
                                 u.role.toLowerCase()
                               )
                                 ? u.role.toLowerCase()
                                 : 'examiner'
-                            }
+                            }}
                             onChange={(e) =>
                               handleInlineRoleUpdate(u, e.target.value)
                             }
@@ -1372,7 +1253,7 @@ export default function AdministrationPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                      <TableCell className="text-xs text-muted-foreground">
                         {formatDateAdded(u.createdAt)}
                       </TableCell>
                       <TableCell className="text-right">
@@ -1449,8 +1330,7 @@ export default function AdministrationPage() {
               <Label htmlFor="modal-add-fullname">Full Name</Label>
               <Input
                 id="modal-add-fullname"
-                type="text"
-                placeholder="e.g., Sarah Jenkins"
+                placeholder="Enter full name"
                 value={fullNameInput}
                 onChange={(e) => {
                   setFullNameInput(e.target.value);
@@ -1466,7 +1346,7 @@ export default function AdministrationPage() {
               <Input
                 id="modal-add-email"
                 type="email"
-                placeholder="e.g., sarah.jenkins@company.com"
+                placeholder="name@company.com"
                 value={emailInput}
                 onChange={(e) => {
                   setEmailInput(e.target.value);
@@ -1520,7 +1400,7 @@ export default function AdministrationPage() {
                   )
                 }
                 disabled={disableAddUserButton}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="examiner">examiner</option>
                 <option value="supervisor">supervisor</option>
@@ -1530,26 +1410,26 @@ export default function AdministrationPage() {
 
             <div className="space-y-2">
               <Label>Assigned MSHA Mine Sites</Label>
-              <div className="rounded-md border p-3 space-y-2 bg-muted/20">
-                {mineOptions.map((mine) => {
-                  const checked = assignedMinesInput.includes(mine.id);
-                  return (
-                    <div key={mine.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`modal-add-mine-${mine.id}`}
-                        checked={checked}
-                        disabled={disableAddUserButton}
-                        onCheckedChange={() => toggleAssignedMineInput(mine.id)}
-                      />
-                      <Label
-                        htmlFor={`modal-add-mine-${mine.id}`}
-                        className="text-sm font-normal cursor-pointer"
-                      >
-                        {mine.label}
-                      </Label>
-                    </div>
-                  );
-                })}
+              <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
+                {mineOptions.map((mine) => (
+                  <div key={mine.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`add-mine-${mine.id}`}
+                      checked={assignedMinesInput.includes(mine.id)}
+                      onCheckedChange={() => toggleAssignedMineInput(mine.id)}
+                      disabled={disableAddUserButton}
+                    />
+                    <Label
+                      htmlFor={`add-mine-${mine.id}`}
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      {mine.name}{' '}
+                      <span className="font-mono text-xs text-muted-foreground">
+                        ({mine.id})
+                      </span>
+                    </Label>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -1557,10 +1437,8 @@ export default function AdministrationPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  setIsAddUserModalOpen(false);
-                  setUserFormError(null);
-                }}
+                onClick={() => setIsAddUserModalOpen(false)}
+                disabled={isSavingUser}
               >
                 Cancel
               </Button>
@@ -1568,12 +1446,12 @@ export default function AdministrationPage() {
                 {isSavingUser ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating User...
+                    Creating...
                   </>
                 ) : (
                   <>
                     <UserPlus className="mr-2 h-4 w-4" />
-                    Create User
+                    Add Team Member
                   </>
                 )}
               </Button>
@@ -1584,7 +1462,7 @@ export default function AdministrationPage() {
 
       {/* Edit User Modal */}
       <Dialog
-        open={Boolean(editingUser)}
+        open={!!editingUser}
         onOpenChange={(open) => {
           if (!open) setEditingUser(null);
         }}
@@ -1593,23 +1471,21 @@ export default function AdministrationPage() {
           <DialogHeader>
             <DialogTitle>Edit Team Member</DialogTitle>
             <DialogDescription>
-              Update role and assigned MSHA mine sites for{' '}
-              <strong>{editingUser?.fullName}</strong>.
+              Update role and assigned mine sites for {editingUser?.fullName}.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSaveUserModal} className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="modal-edit-role">Role</Label>
+              <Label>Role</Label>
               <select
-                id="modal-edit-role"
                 value={editUserRole}
                 onChange={(e) =>
                   setEditUserRole(
                     e.target.value as 'examiner' | 'supervisor' | 'admin'
                   )
                 }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <option value="examiner">examiner</option>
                 <option value="supervisor">supervisor</option>
@@ -1619,25 +1495,25 @@ export default function AdministrationPage() {
 
             <div className="space-y-2">
               <Label>Assigned MSHA Mine Sites</Label>
-              <div className="rounded-md border p-3 space-y-2 bg-muted/20">
-                {mineOptions.map((mine) => {
-                  const checked = editUserMines.includes(mine.id);
-                  return (
-                    <div key={mine.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`modal-edit-mine-${mine.id}`}
-                        checked={checked}
-                        onCheckedChange={() => toggleEditUserMine(mine.id)}
-                      />
-                      <Label
-                        htmlFor={`modal-edit-mine-${mine.id}`}
-                        className="text-sm font-normal cursor-pointer"
-                      >
-                        {mine.label}
-                      </Label>
-                    </div>
-                  );
-                })}
+              <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
+                {mineOptions.map((mine) => (
+                  <div key={mine.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`edit-mine-${mine.id}`}
+                      checked={editUserMines.includes(mine.id)}
+                      onCheckedChange={() => toggleEditUserMine(mine.id)}
+                    />
+                    <Label
+                      htmlFor={`edit-mine-${mine.id}`}
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      {mine.name}{' '}
+                      <span className="font-mono text-xs text-muted-foreground">
+                        ({mine.id})
+                      </span>
+                    </Label>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -1646,11 +1522,22 @@ export default function AdministrationPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setEditingUser(null)}
+                disabled={isUpdatingUser}
               >
                 Cancel
               </Button>
               <Button type="submit" disabled={isUpdatingUser}>
-                {isUpdatingUser ? 'Saving...' : 'Save Changes'}
+                {isUpdatingUser ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Save Changes
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </form>
